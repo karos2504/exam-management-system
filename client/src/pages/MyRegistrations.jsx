@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { registrationAPI } from '../services/api';
+import api from '../services/api';
 import { Calendar, MapPin, Clock, CheckCircle, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Button from '../components/UI/Button';
+import Modal from '../components/UI/Modal';
+import Loading from '../components/UI/Loading';
+import Toast from '../components/UI/Toast';
+import Badge from '../components/UI/Badge';
 
 const MyRegistrations = () => {
   const { user } = useAuth();
@@ -15,7 +20,7 @@ const MyRegistrations = () => {
 
   const fetchRegistrations = async () => {
     try {
-      const response = await registrationAPI.getMyRegistrations();
+      const response = await api.get('/registrations/my-registrations');
       setRegistrations(response.data.registrations);
     } catch (error) {
       toast.error('Lỗi khi tải danh sách đăng ký');
@@ -27,7 +32,7 @@ const MyRegistrations = () => {
   const handleCancelRegistration = async (examId) => {
     if (window.confirm('Bạn có chắc muốn hủy đăng ký kỳ thi này?')) {
       try {
-        await registrationAPI.cancel(examId);
+        await api.delete(`/registrations/${examId}`);
         toast.success('Hủy đăng ký thành công');
         fetchRegistrations();
       } catch (error) {

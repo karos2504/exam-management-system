@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { examAPI, registrationAPI } from '../services/api';
+import api from '../services/api';
 import { CheckCircle, XCircle, Users, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Button from '../components/UI/Button';
+import Modal from '../components/UI/Modal';
+import Loading from '../components/UI/Loading';
+import Toast from '../components/UI/Toast';
+import Badge from '../components/UI/Badge';
 
 const Registrations = () => {
   const { user } = useAuth();
@@ -23,7 +28,7 @@ const Registrations = () => {
 
   const fetchExams = async () => {
     try {
-      const response = await examAPI.getAll();
+      const response = await api.get('/exams');
       setExams(response.data.exams);
       if (response.data.exams.length > 0) {
         setSelectedExam(response.data.exams[0].id);
@@ -37,7 +42,7 @@ const Registrations = () => {
 
   const fetchRegistrations = async (examId) => {
     try {
-      const response = await registrationAPI.getExamRegistrations(examId);
+      const response = await api.get(`/registrations/exam/${examId}`);
       setRegistrations(response.data.registrations);
     } catch (error) {
       toast.error('Lỗi khi tải danh sách đăng ký');
@@ -46,7 +51,7 @@ const Registrations = () => {
 
   const handleConfirmRegistration = async (registrationId) => {
     try {
-      await registrationAPI.confirm(registrationId);
+      await api.put(`/registrations/confirm/${registrationId}`);
       toast.success('Xác nhận đăng ký thành công');
       fetchRegistrations(selectedExam);
     } catch (error) {

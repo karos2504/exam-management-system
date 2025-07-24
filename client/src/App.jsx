@@ -10,6 +10,9 @@ import Exams from './pages/Exams';
 import Schedules from './pages/Schedules';
 import MyRegistrations from './pages/MyRegistrations';
 import Registrations from './pages/Registrations';
+import AdminUsers from './pages/AdminUsers';
+import AdminNotifications from './pages/AdminNotifications';
+import AdminAssignments from './pages/AdminAssignments';
 import './index.css';
 
 // Protected Route component
@@ -51,6 +54,7 @@ const PublicRoute = ({ children }) => {
 };
 
 const AppRoutes = () => {
+  const { user } = useAuth();
   return (
     <Routes>
       {/* Public routes */}
@@ -112,6 +116,13 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+      {user && user.role === 'admin' && (
+        <>
+          <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/notifications" element={<AdminNotifications />} />
+          <Route path="/admin/assignments" element={<AdminAssignments />} />
+        </>
+      )}
 
       {/* Catch all route */}
       <Route path="*" element={<Navigate to="/" replace />} />

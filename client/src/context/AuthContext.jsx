@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI } from '../services/api';
+import api from '../services/api';
 import socketService from '../services/socket';
 
 const AuthContext = createContext();
@@ -24,10 +24,9 @@ export const AuthProvider = ({ children }) => {
 
       if (savedToken && savedUser) {
         try {
-          const response = await authAPI.getProfile();
+          const response = await api.get('/auth/profile');
           setUser(response.data.user);
           setToken(savedToken);
-          
           // Connect to socket and join room
           socketService.connect();
           socketService.joinRoom(response.data.user);
@@ -38,42 +37,37 @@ export const AuthProvider = ({ children }) => {
       }
       setLoading(false);
     };
-
     initializeAuth();
   }, []);
 
   const login = async (credentials) => {
     try {
-      const response = await authAPI.login(credentials);
+      const response = await api.post('/auth/login', credentials);
       const { token: newToken, user: userData } = response.data;
-
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
-
       setToken(newToken);
       setUser(userData);
-
       // Connect to socket and join room
       socketService.connect();
       socketService.joinRoom(userData);
-
       return { success: true };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Đăng nhập thất bại' 
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Đăng nhập thất bại'
       };
     }
   };
 
   const register = async (userData) => {
     try {
-      const response = await authAPI.register(userData);
+      const response = await api.post('/auth/register', userData);
       return { success: true, data: response.data };
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Đăng ký thất bại' 
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Đăng ký thất bại'
       };
     }
   };

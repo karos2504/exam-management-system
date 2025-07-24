@@ -9,6 +9,9 @@ const authRoutes = require('./routes/auth');
 const examRoutes = require('./routes/exams');
 const registrationRoutes = require('./routes/registrations');
 const scheduleRoutes = require('./routes/schedules');
+const userRoutes = require('./routes/users');
+const notificationRoutes = require('./routes/notifications');
+const assignmentRoutes = require('./routes/assignments');
 
 const app = express();
 const server = http.createServer(app);
@@ -32,6 +35,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/schedules', scheduleRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/assignments', assignmentRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

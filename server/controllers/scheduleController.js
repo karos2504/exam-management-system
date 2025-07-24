@@ -66,7 +66,7 @@ const scheduleController = {
   async getAllSchedules(req, res) {
     try {
       const [schedules] = await pool.execute(`
-        SELECT s.*, e.name as exam_name, e.subject, u.name as creator_name
+        SELECT s.*, e.name as exam_name, e.subject_code, e.subject_name, u.full_name as creator_name
         FROM schedules s
         LEFT JOIN exams e ON s.exam_id = e.id
         LEFT JOIN users u ON e.created_by = u.id
@@ -86,7 +86,7 @@ const scheduleController = {
       const { exam_id } = req.params;
 
       const [schedules] = await pool.execute(`
-        SELECT s.*, e.name as exam_name, e.subject
+        SELECT s.*, e.name as exam_name, e.subject_code, e.subject_name
         FROM schedules s
         LEFT JOIN exams e ON s.exam_id = e.id
         WHERE s.exam_id = ?
@@ -183,7 +183,7 @@ const scheduleController = {
       const { room, start_time, end_time, exclude_id } = req.query;
 
       let query = `
-        SELECT s.*, e.name as exam_name, e.subject
+        SELECT s.*, e.name as exam_name, e.subject_code, e.subject_name
         FROM schedules s
         LEFT JOIN exams e ON s.exam_id = e.id
         WHERE s.room = ?

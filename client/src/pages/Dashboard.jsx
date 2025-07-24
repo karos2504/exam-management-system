@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { examAPI, registrationAPI, scheduleAPI } from '../services/api';
+import api from '../services/api';
 import { 
   BookOpen, 
   Calendar, 
@@ -9,6 +9,11 @@ import {
   TrendingUp,
   AlertCircle
 } from 'lucide-react';
+import Button from '../components/UI/Button';
+import Modal from '../components/UI/Modal';
+import Loading from '../components/UI/Loading';
+import Toast from '../components/UI/Toast';
+import Badge from '../components/UI/Badge';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -25,26 +30,32 @@ const Dashboard = () => {
     const fetchDashboardData = async () => {
       try {
         const [examsRes, schedulesRes, registrationsRes] = await Promise.all([
-          examAPI.getAll(),
-          scheduleAPI.getAll(),
-          user?.role === 'student' 
-            ? registrationAPI.getMyRegistrations()
+          api.get('/exams'),
+          api.get('/schedules'),
+          user?.role === 'student'
+            ? api.get('/registrations/my-registrations')
             : Promise.resolve({ data: { registrations: [] } })
         ]);
 
         const exams = examsRes.data.exams;
         const schedules = schedulesRes.data.schedules;
-        const registrations = registrationsRes.data.registrations;
+        let registrations = [];
+        if (user?.role === 'student') {
+          registrations = registrationsRes.data.registrations;
+        } else {
+          // Tính tổng đăng ký từ exams
+          registrations = exams.reduce((sum, e) => sum + (e.registration_count || 0), 0);
+        }
 
         // Tính toán thống kê
-        const upcomingExams = schedules.filter(schedule => 
+        const upcomingExams = schedules.filter(schedule =>
           new Date(schedule.start_time) > new Date()
         ).length;
 
         setStats({
           totalExams: exams.length,
           totalSchedules: schedules.length,
-          totalRegistrations: registrations.length,
+          totalRegistrations: user?.role === 'student' ? registrations.length : registrations,
           upcomingExams,
         });
 
@@ -173,18 +184,27 @@ const Dashboard = () => {
           </div>
           <div className="card-body">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <button className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                <BookOpen className="h-5 w-5 text-primary-600 mr-3" />
+              <Button
+                onClick={() => {}}
+                icon={BookOpen}
+                className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+              >
                 <span className="text-sm font-medium text-gray-900">Tạo kỳ thi mới</span>
-              </button>
-              <button className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                <Calendar className="h-5 w-5 text-primary-600 mr-3" />
+              </Button>
+              <Button
+                onClick={() => {}}
+                icon={Calendar}
+                className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+              >
                 <span className="text-sm font-medium text-gray-900">Xếp lịch thi</span>
-              </button>
-              <button className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                <Users className="h-5 w-5 text-primary-600 mr-3" />
+              </Button>
+              <Button
+                onClick={() => {}}
+                icon={Users}
+                className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+              >
                 <span className="text-sm font-medium text-gray-900">Quản lý đăng ký</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>

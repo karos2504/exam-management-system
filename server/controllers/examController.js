@@ -10,12 +10,12 @@ const examController = {
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, subject } = req.body;
+      const { name, subject_code, subject_name, exam_type, semester, duration_minutes, description } = req.body;
       const createdBy = req.user.id;
 
       const [result] = await pool.execute(
-        'INSERT INTO exams (name, subject, created_by) VALUES (?, ?, ?)',
-        [name, subject, createdBy]
+        'INSERT INTO exams (name, subject_code, subject_name, exam_type, semester, duration_minutes, description, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [name, subject_code, subject_name, exam_type, semester, duration_minutes, description, createdBy]
       );
 
       res.status(201).json({
@@ -23,7 +23,12 @@ const examController = {
         exam: {
           id: result.insertId,
           name,
-          subject,
+          subject_code,
+          subject_name,
+          exam_type,
+          semester,
+          duration_minutes,
+          description,
           created_by: createdBy
         }
       });
@@ -37,11 +42,11 @@ const examController = {
   async getAllExams(req, res) {
     try {
       const [exams] = await pool.execute(`
-        SELECT e.*, u.name as creator_name, 
+        SELECT e.*, u.full_name as creator_name, 
                COUNT(r.id) as registration_count
         FROM exams e
         LEFT JOIN users u ON e.created_by = u.id
-        LEFT JOIN registrations r ON e.id = r.exam_id
+        LEFT JOIN exam_registrations r ON e.id = r.exam_id
         GROUP BY e.id
         ORDER BY e.created_at DESC
       `);
@@ -59,7 +64,7 @@ const examController = {
       const { id } = req.params;
 
       const [exams] = await pool.execute(`
-        SELECT e.*, u.name as creator_name
+        SELECT e.*, u.full_name as creator_name
         FROM exams e
         LEFT JOIN users u ON e.created_by = u.id
         WHERE e.id = ?
@@ -77,9 +82,9 @@ const examController = {
 
       // Lấy danh sách đăng ký
       const [registrations] = await pool.execute(`
-        SELECT r.*, u.name as student_name, u.email as student_email
-        FROM registrations r
-        LEFT JOIN users u ON r.user_id = u.id
+        SELECT r.*, u.full_name as student_name, u.email as student_email
+        FROM exam_registrations r
+        LEFT JOIN users u ON r.student_id = u.id
         WHERE r.exam_id = ?
         ORDER BY r.registered_at
       `, [id]);
@@ -104,7 +109,7 @@ const examController = {
       }
 
       const { id } = req.params;
-      const { name, subject } = req.body;
+      const { name, subject_code, subject_name, exam_type, semester, duration_minutes, description } = req.body;
 
       // Kiểm tra kỳ thi tồn tại
       const [exams] = await pool.execute(
@@ -122,8 +127,8 @@ const examController = {
       }
 
       await pool.execute(
-        'UPDATE exams SET name = ?, subject = ? WHERE id = ?',
-        [name, subject, id]
+        'UPDATE exams SET name = ?, subject_code = ?, subject_name = ?, exam_type = ?, semester = ?, duration_minutes = ?, description = ? WHERE id = ?',
+        [name, subject_code, subject_name, exam_type, semester, duration_minutes, description, id]
       );
 
       res.json({ message: 'Cập nhật kỳ thi thành công' });
@@ -154,7 +159,7 @@ const examController = {
       }
 
       // Xóa các bản ghi liên quan trước
-      await pool.execute('DELETE FROM registrations WHERE exam_id = ?', [id]);
+      await pool.execute('DELETE FROM exam_registrations WHERE exam_id = ?', [id]);
       await pool.execute('DELETE FROM schedules WHERE exam_id = ?', [id]);
       await pool.execute('DELETE FROM exams WHERE id = ?', [id]);
 

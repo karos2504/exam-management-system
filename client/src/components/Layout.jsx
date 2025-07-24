@@ -10,7 +10,9 @@ import {
   LogOut,
   Menu,
   X,
-  User
+  User,
+  Bell,
+  Briefcase
 } from 'lucide-react';
 
 const Layout = ({ children }) => {
@@ -73,6 +75,46 @@ const Layout = ({ children }) => {
                 </Link>
               );
             })}
+            {user && user.role === 'admin' && (
+              <>
+                <Link
+                  to="/admin/users"
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                    isActive('/admin/users')
+                      ? 'bg-primary-100 text-primary-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <Users className="mr-3 h-5 w-5" />
+                  Quản lý người dùng
+                </Link>
+                <Link
+                  to="/admin/notifications"
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                    isActive('/admin/notifications')
+                      ? 'bg-primary-100 text-primary-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <Bell className="mr-3 h-5 w-5" />
+                  Quản lý thông báo
+                </Link>
+                <Link
+                  to="/admin/assignments"
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                    isActive('/admin/assignments')
+                      ? 'bg-primary-100 text-primary-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <Briefcase className="mr-3 h-5 w-5" />
+                  Quản lý phân công
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </div>
@@ -101,6 +143,43 @@ const Layout = ({ children }) => {
                 </Link>
               );
             })}
+            {user && user.role === 'admin' && (
+              <>
+                <Link
+                  to="/admin/users"
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                    isActive('/admin/users')
+                      ? 'bg-primary-100 text-primary-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <Users className="mr-3 h-5 w-5" />
+                  Quản lý người dùng
+                </Link>
+                <Link
+                  to="/admin/notifications"
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                    isActive('/admin/notifications')
+                      ? 'bg-primary-100 text-primary-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <Bell className="mr-3 h-5 w-5" />
+                  Quản lý thông báo
+                </Link>
+                <Link
+                  to="/admin/assignments"
+                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                    isActive('/admin/assignments')
+                      ? 'bg-primary-100 text-primary-900'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <Briefcase className="mr-3 h-5 w-5" />
+                  Quản lý phân công
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </div>

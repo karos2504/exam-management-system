@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { examAPI } from '../services/api';
+import api from '../services/api';
 import { Plus, Edit, Trash2, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Button from '../components/UI/Button';
+import Modal from '../components/UI/Modal';
+import Loading from '../components/UI/Loading';
+import Toast from '../components/UI/Toast';
+import Badge from '../components/UI/Badge';
 
 const Exams = () => {
   const { user } = useAuth();
@@ -18,7 +23,7 @@ const Exams = () => {
 
   const fetchExams = async () => {
     try {
-      const response = await examAPI.getAll();
+      const response = await api.get('/exams');
       setExams(response.data.exams);
     } catch (error) {
       toast.error('Lỗi khi tải danh sách kỳ thi');
@@ -31,10 +36,10 @@ const Exams = () => {
     e.preventDefault();
     try {
       if (editingExam) {
-        await examAPI.update(editingExam.id, formData);
+        await api.put(`/exams/${editingExam.id}`, formData);
         toast.success('Cập nhật kỳ thi thành công');
       } else {
-        await examAPI.create(formData);
+        await api.post('/exams', formData);
         toast.success('Tạo kỳ thi thành công');
       }
       setShowModal(false);
@@ -55,7 +60,7 @@ const Exams = () => {
   const handleDelete = async (examId) => {
     if (window.confirm('Bạn có chắc muốn xóa kỳ thi này?')) {
       try {
-        await examAPI.delete(examId);
+        await api.delete(`/exams/${examId}`);
         toast.success('Xóa kỳ thi thành công');
         fetchExams();
       } catch (error) {
@@ -83,13 +88,10 @@ const Exams = () => {
           </p>
         </div>
         {(user?.role === 'teacher' || user?.role === 'admin') && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="btn-primary flex items-center"
-          >
+          <Button onClick={() => setShowModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Tạo kỳ thi
-          </button>
+          </Button>
         )}
       </div>
 
@@ -135,29 +137,21 @@ const Exams = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          {exam.registration_count}
-                        </span>
+                        <Badge variant="success">{exam.registration_count}</Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
-                          <button className="text-primary-600 hover:text-primary-900">
+                          <Button variant="link" onClick={() => handleEdit(exam)}>
                             <Eye className="h-4 w-4" />
-                          </button>
+                          </Button>
                           {(user?.role === 'teacher' || user?.role === 'admin') && (
                             <>
-                              <button
-                                onClick={() => handleEdit(exam)}
-                                className="text-blue-600 hover:text-blue-900"
-                              >
+                              <Button variant="link" onClick={() => handleEdit(exam)}>
                                 <Edit className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(exam.id)}
-                                className="text-red-600 hover:text-red-900"
-                              >
+                              </Button>
+                              <Button variant="link" onClick={() => handleDelete(exam.id)}>
                                 <Trash2 className="h-4 w-4" />
-                              </button>
+                              </Button>
                             </>
                           )}
                         </div>
@@ -184,59 +178,55 @@ const Exams = () => {
       </div>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {editingExam ? 'Sửa kỳ thi' : 'Tạo kỳ thi mới'}
-              </h3>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Tên kỳ thi
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="input-field mt-1"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Môn thi
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.subject}
-                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    className="input-field mt-1"
-                    required
-                  />
-                </div>
-                <div className="flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowModal(false);
-                      setEditingExam(null);
-                      setFormData({ name: '', subject: '' });
-                    }}
-                    className="btn-secondary"
-                  >
-                    Hủy
-                  </button>
-                  <button type="submit" className="btn-primary">
-                    {editingExam ? 'Cập nhật' : 'Tạo'}
-                  </button>
-                </div>
-              </form>
-            </div>
+      <Modal
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setEditingExam(null);
+          setFormData({ name: '', subject: '' });
+        }}
+        title={editingExam ? 'Sửa kỳ thi' : 'Tạo kỳ thi mới'}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Tên kỳ thi
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="input-field mt-1"
+              required
+            />
           </div>
-        </div>
-      )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Môn thi
+            </label>
+            <input
+              type="text"
+              value={formData.subject}
+              onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+              className="input-field mt-1"
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <Button variant="secondary" onClick={() => {
+              setShowModal(false);
+              setEditingExam(null);
+              setFormData({ name: '', subject: '' });
+            }}>
+              Hủy
+            </Button>
+            <Button variant="primary">
+              {editingExam ? 'Cập nhật' : 'Tạo'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <Toast />
     </div>
   );
 };

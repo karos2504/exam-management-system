@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { scheduleAPI, examAPI } from '../services/api';
+import api from '../services/api';
 import { Plus, Edit, Trash2, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Button from '../components/UI/Button';
+import Modal from '../components/UI/Modal';
+import Loading from '../components/UI/Loading';
+import Toast from '../components/UI/Toast';
+import Badge from '../components/UI/Badge';
 
 const Schedules = () => {
   const { user } = useAuth();
@@ -25,8 +30,8 @@ const Schedules = () => {
   const fetchData = async () => {
     try {
       const [schedulesRes, examsRes] = await Promise.all([
-        scheduleAPI.getAll(),
-        examAPI.getAll()
+        api.get('/schedules'),
+        api.get('/exams')
       ]);
       setSchedules(schedulesRes.data.schedules);
       setExams(examsRes.data.exams);
@@ -41,10 +46,10 @@ const Schedules = () => {
     e.preventDefault();
     try {
       if (editingSchedule) {
-        await scheduleAPI.update(editingSchedule.id, formData);
+        await api.put(`/schedules/${editingSchedule.id}`, formData);
         toast.success('Cập nhật lịch thi thành công');
       } else {
-        await scheduleAPI.create(formData);
+        await api.post('/schedules', formData);
         toast.success('Tạo lịch thi thành công');
       }
       setShowModal(false);
@@ -70,7 +75,7 @@ const Schedules = () => {
   const handleDelete = async (scheduleId) => {
     if (window.confirm('Bạn có chắc muốn xóa lịch thi này?')) {
       try {
-        await scheduleAPI.delete(scheduleId);
+        await api.delete(`/schedules/${scheduleId}`);
         toast.success('Xóa lịch thi thành công');
         fetchData();
       } catch (error) {
@@ -102,13 +107,10 @@ const Schedules = () => {
           </p>
         </div>
         {(user?.role === 'teacher' || user?.role === 'admin') && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="btn-primary flex items-center"
-          >
+          <Button onClick={() => setShowModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Tạo lịch thi
-          </button>
+          </Button>
         )}
       </div>
 
@@ -165,18 +167,12 @@ const Schedules = () => {
                         <div className="flex space-x-2">
                           {(user?.role === 'teacher' || user?.role === 'admin') && (
                             <>
-                              <button
-                                onClick={() => handleEdit(schedule)}
-                                className="text-blue-600 hover:text-blue-900"
-                              >
+                              <Button onClick={() => handleEdit(schedule)}>
                                 <Edit className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(schedule.id)}
-                                className="text-red-600 hover:text-red-900"
-                              >
+                              </Button>
+                              <Button onClick={() => handleDelete(schedule.id)}>
                                 <Trash2 className="h-4 w-4" />
-                              </button>
+                              </Button>
                             </>
                           )}
                         </div>
@@ -200,88 +196,86 @@ const Schedules = () => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {editingSchedule ? 'Sửa lịch thi' : 'Tạo lịch thi mới'}
-              </h3>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Kỳ thi
-                  </label>
-                  <select
-                    value={formData.exam_id}
-                    onChange={(e) => setFormData({ ...formData, exam_id: e.target.value })}
-                    className="input-field mt-1"
-                    required
-                  >
-                    <option value="">Chọn kỳ thi</option>
-                    {exams.map((exam) => (
-                      <option key={exam.id} value={exam.id}>
-                        {exam.name} - {exam.subject}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Phòng thi
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.room}
-                    onChange={(e) => setFormData({ ...formData, room: e.target.value })}
-                    className="input-field mt-1"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Thời gian bắt đầu
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={formData.start_time}
-                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                    className="input-field mt-1"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Thời gian kết thúc
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={formData.end_time}
-                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                    className="input-field mt-1"
-                    required
-                  />
-                </div>
-                <div className="flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowModal(false);
-                      setEditingSchedule(null);
-                      setFormData({ exam_id: '', room: '', start_time: '', end_time: '' });
-                    }}
-                    className="btn-secondary"
-                  >
-                    Hủy
-                  </button>
-                  <button type="submit" className="btn-primary">
-                    {editingSchedule ? 'Cập nhật' : 'Tạo'}
-                  </button>
-                </div>
-              </form>
+        <Modal
+          isOpen={showModal}
+          onClose={() => {
+            setShowModal(false);
+            setEditingSchedule(null);
+            setFormData({ exam_id: '', room: '', start_time: '', end_time: '' });
+          }}
+          title={editingSchedule ? 'Sửa lịch thi' : 'Tạo lịch thi mới'}
+        >
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Kỳ thi
+              </label>
+              <select
+                value={formData.exam_id}
+                onChange={(e) => setFormData({ ...formData, exam_id: e.target.value })}
+                className="input-field mt-1"
+                required
+              >
+                <option value="">Chọn kỳ thi</option>
+                {exams.map((exam) => (
+                  <option key={exam.id} value={exam.id}>
+                    {exam.name} - {exam.subject}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Phòng thi
+              </label>
+              <input
+                type="text"
+                value={formData.room}
+                onChange={(e) => setFormData({ ...formData, room: e.target.value })}
+                className="input-field mt-1"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Thời gian bắt đầu
+              </label>
+              <input
+                type="datetime-local"
+                value={formData.start_time}
+                onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                className="input-field mt-1"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Thời gian kết thúc
+              </label>
+              <input
+                type="datetime-local"
+                value={formData.end_time}
+                onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                className="input-field mt-1"
+                required
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <Button onClick={() => {
+                setShowModal(false);
+                setEditingSchedule(null);
+                setFormData({ exam_id: '', room: '', start_time: '', end_time: '' });
+              }}>
+                Hủy
+              </Button>
+              <Button type="submit">
+                {editingSchedule ? 'Cập nhật' : 'Tạo'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
+      <Toast />
     </div>
   );
 };

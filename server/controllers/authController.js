@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const pool = require('../config/database');
+const { v4: uuidv4 } = require('uuid');
 
 const authController = {
   // Đăng ký người dùng mới
@@ -12,34 +13,37 @@ const authController = {
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, email, password, role } = req.body;
+      const { username, full_name, email, password, role, phone, avatar_url } = req.body;
 
-      // Kiểm tra email đã tồn tại
+      // Kiểm tra username hoặc email đã tồn tại
       const [existingUsers] = await pool.execute(
-        'SELECT id FROM users WHERE email = ?',
-        [email]
+        'SELECT id FROM users WHERE username = ? OR email = ?',
+        [username, email]
       );
-
       if (existingUsers.length > 0) {
-        return res.status(400).json({ message: 'Email đã tồn tại' });
+        return res.status(400).json({ message: 'Username hoặc email đã tồn tại' });
       }
 
       // Mã hóa mật khẩu
-      const hashedPassword = await bcrypt.hash(password, 10);
+      const password_hash = await bcrypt.hash(password, 10);
+      const id = uuidv4();
 
       // Tạo người dùng mới
-      const [result] = await pool.execute(
-        'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-        [name, email, hashedPassword, role]
+      await pool.execute(
+        'INSERT INTO users (id, username, full_name, email, password_hash, phone, role, avatar_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, username, full_name, email, password_hash, phone, role, avatar_url]
       );
 
       res.status(201).json({
         message: 'Đăng ký thành công',
         user: {
-          id: result.insertId,
-          name,
+          id,
+          username,
+          full_name,
           email,
-          role
+          role,
+          phone,
+          avatar_url
         }
       });
     } catch (error) {
@@ -56,30 +60,38 @@ const authController = {
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { email, password } = req.body;
+      // Cho phép nhận identifier, username hoặc email
+      const identifier = req.body.identifier || req.body.username || req.body.email;
+      const password = req.body.password;
+      if (!identifier || !password) {
+        return res.status(400).json({ message: 'Thiếu tài khoản hoặc mật khẩu' });
+      }
 
-      // Tìm người dùng theo email
+      // Tìm người dùng theo username hoặc email
       const [users] = await pool.execute(
-        'SELECT * FROM users WHERE email = ?',
-        [email]
+        'SELECT * FROM users WHERE username = ? OR email = ?',
+        [identifier, identifier]
       );
 
       if (users.length === 0) {
-        return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
+        return res.status(401).json({ message: 'Tài khoản hoặc mật khẩu không đúng' });
       }
 
       const user = users[0];
+      if (!user.password_hash) {
+        return res.status(401).json({ message: 'Tài khoản hoặc mật khẩu không đúng' });
+      }
 
       // Kiểm tra mật khẩu
-      const isValidPassword = await bcrypt.compare(password, user.password);
+      const isValidPassword = await bcrypt.compare(password, user.password_hash);
       if (!isValidPassword) {
-        return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
+        return res.status(401).json({ message: 'Tài khoản hoặc mật khẩu không đúng' });
       }
 
       // Tạo JWT token
       const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role },
-        process.env.JWT_SECRET,
+        { id: user.id, username: user.username, email: user.email, role: user.role },
+        process.env.JWT_SECRET || 'secret-key',
         { expiresIn: '24h' }
       );
 
@@ -88,9 +100,12 @@ const authController = {
         token,
         user: {
           id: user.id,
-          name: user.name,
+          username: user.username,
+          full_name: user.full_name,
           email: user.email,
-          role: user.role
+          role: user.role,
+          phone: user.phone,
+          avatar_url: user.avatar_url
         }
       });
     } catch (error) {
@@ -103,7 +118,7 @@ const authController = {
   async getProfile(req, res) {
     try {
       const [users] = await pool.execute(
-        'SELECT id, name, email, role FROM users WHERE id = ?',
+        'SELECT id, username, full_name, email, role, phone, avatar_url FROM users WHERE id = ?',
         [req.user.id]
       );
 
