@@ -18,44 +18,71 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
 
   useEffect(() => {
+    let isMounted = true;
+
     const initializeAuth = async () => {
       const savedToken = localStorage.getItem('token');
-      const savedUser = localStorage.getItem('user');
+      const savedUser = JSON.parse(localStorage.getItem('user') || 'null');
 
-      if (savedToken && savedUser) {
+      if (savedToken && savedUser && isMounted) {
+        console.log('🌟 [AuthProvider] Saved token:', savedToken);
+        console.log('🌟 [AuthProvider] Saved user:', savedUser);
+
         try {
+          api.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
           const response = await api.get('/auth/profile');
-          setUser(response.data.user);
-          setToken(savedToken);
-          // Connect to socket and join room
-          socketService.connect();
-          socketService.joinRoom(response.data.user);
+          const profileUser = response.data.user;
+
+          if (isMounted) {
+            setUser(profileUser);
+            setToken(savedToken);
+
+            if (['teacher', 'student'].includes(profileUser.role)) {
+              socketService.connect({ id: profileUser.id, role: profileUser.role });
+              socketService.joinRoom({ id: profileUser.id, role: profileUser.role });
+            }
+          }
         } catch (error) {
-          console.error('Failed to get profile:', error);
-          logout();
+          console.error('❌ [AuthProvider] Failed to get profile:', error);
+          if (isMounted) {
+            logout();
+          }
         }
       }
-      setLoading(false);
+      if (isMounted) {
+        setLoading(false);
+      }
     };
+
     initializeAuth();
+
+    return () => {
+      isMounted = false;
+      socketService.disconnect();
+    };
   }, []);
 
   const login = async (credentials) => {
     try {
       const response = await api.post('/auth/login', credentials);
       const { token: newToken, user: userData } = response.data;
+
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
+      api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
       setToken(newToken);
       setUser(userData);
-      // Connect to socket and join room
-      socketService.connect();
-      socketService.joinRoom(userData);
+
+      if (['teacher', 'student'].includes(userData.role)) {
+        socketService.connect({ id: userData.id, role: userData.role });
+        socketService.joinRoom({ id: userData.id, role: userData.role });
+      }
+
       return { success: true };
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.message || 'Đăng nhập thất bại'
+        error: error.response?.data?.message || 'Đăng nhập thất bại',
       };
     }
   };
@@ -67,7 +94,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.message || 'Đăng ký thất bại'
+        error: error.response?.data?.message || 'Đăng ký thất bại',
       };
     }
   };
@@ -77,6 +104,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
+    delete api.defaults.headers.common['Authorization'];
     socketService.disconnect();
   };
 
@@ -96,9 +124,5 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!token,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-}; 
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};

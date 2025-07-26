@@ -1,8 +1,8 @@
 const { validationResult } = require('express-validator');
+const { v4: uuidv4 } = require('uuid');
 const pool = require('../config/database');
 
 const examController = {
-  // Tạo kỳ thi mới
   async createExam(req, res) {
     try {
       const errors = validationResult(req);
@@ -10,40 +10,59 @@ const examController = {
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, subject_code, subject_name, exam_type, semester, duration_minutes, description } = req.body;
-      const createdBy = req.user.id;
+      const { role, id: userId } = req.user || {};
+      if (!['teacher', 'admin'].includes(role)) {
+        return res.status(403).json({ message: 'Chỉ teacher hoặc admin được tạo kỳ thi' });
+      }
 
-      const [result] = await pool.execute(
-        'INSERT INTO exams (name, subject_code, subject_name, exam_type, semester, duration_minutes, description, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, subject_code, subject_name, exam_type, semester, duration_minutes, description, createdBy]
+      const {
+        code, name, description, subject_code, subject_name,
+        exam_type, semester, duration_minutes
+      } = req.body;
+
+      const [existing] = await pool.execute(
+        'SELECT id FROM exams WHERE code = ?', [code]
       );
+      if (existing.length > 0) {
+        return res.status(400).json({ message: 'Mã kỳ thi đã tồn tại' });
+      }
+
+      const newId = uuidv4();
+      await pool.execute(
+        `INSERT INTO exams (id, code, name, description, subject_code, subject_name, 
+          exam_type, semester, duration_minutes, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          newId, code, name, description || null,
+          subject_code, subject_name, exam_type || null,
+          semester || null, duration_minutes, userId
+        ]
+      );
+
+      const [createdExam] = await pool.execute(
+        'SELECT * FROM exams WHERE id = ?', [newId]
+      );
+
+      // ⚡ TODO: nếu bạn có io => io.emit('examUpdate', createdExam[0]);
 
       res.status(201).json({
         message: 'Tạo kỳ thi thành công',
-        exam: {
-          id: result.insertId,
-          name,
-          subject_code,
-          subject_name,
-          exam_type,
-          semester,
-          duration_minutes,
-          description,
-          created_by: createdBy
-        }
+        exam: createdExam[0],
       });
-    } catch (error) {
-      console.error('Lỗi tạo kỳ thi:', error);
+
+    } catch (err) {
+      console.error('Lỗi tạo kỳ thi:', err);
       res.status(500).json({ message: 'Lỗi server' });
     }
   },
 
-  // Lấy danh sách tất cả kỳ thi
   async getAllExams(req, res) {
     try {
       const [exams] = await pool.execute(`
-        SELECT e.*, u.full_name as creator_name, 
-               COUNT(r.id) as registration_count
+        SELECT e.id, e.code, e.name, e.description, e.subject_code, e.subject_name, 
+               e.exam_type, e.semester, e.duration_minutes, e.created_by, e.created_at,
+               u.full_name AS creator_name,
+               COUNT(r.id) AS registration_count
         FROM exams e
         LEFT JOIN users u ON e.created_by = u.id
         LEFT JOIN exam_registrations r ON e.id = r.exam_id
@@ -52,19 +71,19 @@ const examController = {
       `);
 
       res.json({ exams });
-    } catch (error) {
-      console.error('Lỗi lấy danh sách kỳ thi:', error);
+
+    } catch (err) {
+      console.error('Lỗi lấy danh sách kỳ thi:', err);
       res.status(500).json({ message: 'Lỗi server' });
     }
   },
 
-  // Lấy thông tin chi tiết kỳ thi
   async getExamById(req, res) {
     try {
       const { id } = req.params;
 
       const [exams] = await pool.execute(`
-        SELECT e.*, u.full_name as creator_name
+        SELECT e.*, u.full_name AS creator_name
         FROM exams e
         LEFT JOIN users u ON e.created_by = u.id
         WHERE e.id = ?
@@ -74,15 +93,13 @@ const examController = {
         return res.status(404).json({ message: 'Không tìm thấy kỳ thi' });
       }
 
-      // Lấy danh sách lịch thi của kỳ thi này
       const [schedules] = await pool.execute(
-        'SELECT * FROM schedules WHERE exam_id = ? ORDER BY start_time',
+        `SELECT * FROM schedules WHERE exam_id = ? ORDER BY start_time`,
         [id]
       );
 
-      // Lấy danh sách đăng ký
       const [registrations] = await pool.execute(`
-        SELECT r.*, u.full_name as student_name, u.email as student_email
+        SELECT r.*, u.full_name AS student_name, u.email AS student_email
         FROM exam_registrations r
         LEFT JOIN users u ON r.student_id = u.id
         WHERE r.exam_id = ?
@@ -92,15 +109,15 @@ const examController = {
       res.json({
         exam: exams[0],
         schedules,
-        registrations
+        registrations,
       });
-    } catch (error) {
-      console.error('Lỗi lấy thông tin kỳ thi:', error);
+
+    } catch (err) {
+      console.error('Lỗi lấy thông tin kỳ thi:', err);
       res.status(500).json({ message: 'Lỗi server' });
     }
   },
 
-  // Cập nhật kỳ thi
   async updateExam(req, res) {
     try {
       const errors = validationResult(req);
@@ -109,66 +126,83 @@ const examController = {
       }
 
       const { id } = req.params;
-      const { name, subject_code, subject_name, exam_type, semester, duration_minutes, description } = req.body;
+      const { code, name, description, subject_code, subject_name, exam_type, semester, duration_minutes } = req.body;
 
-      // Kiểm tra kỳ thi tồn tại
       const [exams] = await pool.execute(
-        'SELECT * FROM exams WHERE id = ?',
-        [id]
+        'SELECT * FROM exams WHERE id = ?', [id]
       );
-
       if (exams.length === 0) {
         return res.status(404).json({ message: 'Không tìm thấy kỳ thi' });
       }
 
-      // Chỉ người tạo hoặc admin mới được sửa
-      if (exams[0].created_by !== req.user.id && req.user.role !== 'admin') {
+      const exam = exams[0];
+      const { role, id: userId } = req.user || {};
+      if (exam.created_by !== userId && role !== 'admin') {
         return res.status(403).json({ message: 'Không có quyền sửa kỳ thi này' });
       }
 
+      if (code !== exam.code) {
+        const [exists] = await pool.execute(
+          'SELECT id FROM exams WHERE code = ? AND id != ?', [code, id]
+        );
+        if (exists.length > 0) {
+          return res.status(400).json({ message: 'Mã kỳ thi đã tồn tại' });
+        }
+      }
+
       await pool.execute(
-        'UPDATE exams SET name = ?, subject_code = ?, subject_name = ?, exam_type = ?, semester = ?, duration_minutes = ?, description = ? WHERE id = ?',
-        [name, subject_code, subject_name, exam_type, semester, duration_minutes, description, id]
+        `UPDATE exams SET code = ?, name = ?, description = ?, subject_code = ?, 
+          subject_name = ?, exam_type = ?, semester = ?, duration_minutes = ?
+         WHERE id = ?`,
+        [code, name, description || null, subject_code, subject_name,
+          exam_type || null, semester || null, duration_minutes, id]
       );
 
-      res.json({ message: 'Cập nhật kỳ thi thành công' });
-    } catch (error) {
-      console.error('Lỗi cập nhật kỳ thi:', error);
+      const [updated] = await pool.execute('SELECT * FROM exams WHERE id = ?', [id]);
+
+      // ⚡ TODO: nếu có io => io.emit('examUpdate', updated[0]);
+
+      res.json({
+        message: 'Cập nhật kỳ thi thành công',
+        exam: updated[0],
+      });
+
+    } catch (err) {
+      console.error('Lỗi cập nhật kỳ thi:', err);
       res.status(500).json({ message: 'Lỗi server' });
     }
   },
 
-  // Xóa kỳ thi
   async deleteExam(req, res) {
     try {
       const { id } = req.params;
 
-      // Kiểm tra kỳ thi tồn tại
       const [exams] = await pool.execute(
-        'SELECT * FROM exams WHERE id = ?',
-        [id]
+        'SELECT * FROM exams WHERE id = ?', [id]
       );
-
       if (exams.length === 0) {
         return res.status(404).json({ message: 'Không tìm thấy kỳ thi' });
       }
 
-      // Chỉ người tạo hoặc admin mới được xóa
-      if (exams[0].created_by !== req.user.id && req.user.role !== 'admin') {
+      const { role, id: userId } = req.user || {};
+      if (exams[0].created_by !== userId && role !== 'admin') {
         return res.status(403).json({ message: 'Không có quyền xóa kỳ thi này' });
       }
 
-      // Xóa các bản ghi liên quan trước
-      await pool.execute('DELETE FROM exam_registrations WHERE exam_id = ?', [id]);
+      // 🗑️ Xoá liên quan:
       await pool.execute('DELETE FROM schedules WHERE exam_id = ?', [id]);
+      await pool.execute('DELETE FROM exam_registrations WHERE exam_id = ?', [id]);
       await pool.execute('DELETE FROM exams WHERE id = ?', [id]);
 
+      // ⚡ TODO: nếu có io => io.emit('examDeleted', { id });
+
       res.json({ message: 'Xóa kỳ thi thành công' });
-    } catch (error) {
-      console.error('Lỗi xóa kỳ thi:', error);
+
+    } catch (err) {
+      console.error('Lỗi xóa kỳ thi:', err);
       res.status(500).json({ message: 'Lỗi server' });
     }
-  }
+  },
 };
 
-module.exports = examController; 
+module.exports = examController;

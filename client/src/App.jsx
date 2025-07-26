@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
+import Notifications from './components/Notifications';
 import Dashboard from './pages/Dashboard';
 import Exams from './pages/Exams';
 import Schedules from './pages/Schedules';
@@ -13,9 +14,10 @@ import Registrations from './pages/Registrations';
 import AdminUsers from './pages/AdminUsers';
 import AdminNotifications from './pages/AdminNotifications';
 import AdminAssignments from './pages/AdminAssignments';
+import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
+import '../../public/styles.css';
 
-// Protected Route component
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
 
@@ -34,7 +36,6 @@ const ProtectedRoute = ({ children }) => {
   return <Layout>{children}</Layout>;
 };
 
-// Public Route component (redirect if authenticated)
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
 
@@ -116,13 +117,38 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-      {user && user.role === 'admin' && (
-        <>
-          <Route path="/admin/users" element={<AdminUsers />} />
-          <Route path="/admin/notifications" element={<AdminNotifications />} />
-          <Route path="/admin/assignments" element={<AdminAssignments />} />
-        </>
-      )}
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <Notifications />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute>
+            <AdminUsers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/notifications"
+        element={
+          <ProtectedRoute>
+            <AdminNotifications />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/assignments"
+        element={
+          <ProtectedRoute>
+            <AdminAssignments />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Catch all route */}
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -133,8 +159,10 @@ const AppRoutes = () => {
 const App = () => {
   return (
     <AuthProvider>
-      <Router>
-        <AppRoutes />
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
         <Toaster
           position="top-right"
           toastOptions={{
@@ -164,4 +192,4 @@ const App = () => {
   );
 };
 
-export default App; 
+export default App;

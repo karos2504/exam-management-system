@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { 
-  BookOpen, 
-  Calendar, 
-  Users, 
+import {
+  BookOpen,
+  Calendar,
+  Users,
   Clock,
   TrendingUp,
   AlertCircle
@@ -173,42 +173,6 @@ const Dashboard = () => {
           )}
         </div>
       </div>
-
-      {/* Quick Actions */}
-      {user?.role !== 'student' && (
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Thao tác nhanh
-            </h3>
-          </div>
-          <div className="card-body">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Button
-                onClick={() => {}}
-                icon={BookOpen}
-                className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
-              >
-                <span className="text-sm font-medium text-gray-900">Tạo kỳ thi mới</span>
-              </Button>
-              <Button
-                onClick={() => {}}
-                icon={Calendar}
-                className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
-              >
-                <span className="text-sm font-medium text-gray-900">Xếp lịch thi</span>
-              </Button>
-              <Button
-                onClick={() => {}}
-                icon={Users}
-                className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
-              >
-                <span className="text-sm font-medium text-gray-900">Quản lý đăng ký</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

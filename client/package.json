@@ -4,19 +4,21 @@
   "description": "Frontend cho hệ thống quản lý đăng ký, xếp lịch thi",
   "private": true,
   "dependencies": {
+    "autoprefixer": "^10.4.14",
+    "axios": "^1.3.4",
+    "clsx": "^1.2.1",
+    "date-fns": "^2.29.3",
+    "lucide-react": "^0.263.1",
+    "postcss": "^8.4.21",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.8.1",
-    "axios": "^1.3.4",
-    "socket.io-client": "^4.6.1",
     "react-hook-form": "^7.43.5",
     "react-hot-toast": "^2.4.0",
-    "lucide-react": "^0.263.1",
-    "date-fns": "^2.29.3",
-    "clsx": "^1.2.1",
-    "tailwindcss": "^3.2.7",
-    "autoprefixer": "^10.4.14",
-    "postcss": "^8.4.21"
+    "react-router-dom": "^6.8.1",
+    "react-select": "^5.10.2",
+    "react-toastify": "^11.0.5",
+    "socket.io-client": "^4.6.1",
+    "tailwindcss": "^3.2.7"
   },
   "devDependencies": {
     "@types/react": "^18.0.28",
@@ -29,4 +31,4 @@
     "build": "vite build",
     "preview": "vite preview"
   }
-} 
+}

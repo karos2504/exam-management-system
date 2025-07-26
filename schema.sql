@@ -12,11 +12,13 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
     full_name VARCHAR(100) NOT NULL,
-    phone VARCHAR(20), -- Thêm trường số điện thoại
+    phone VARCHAR(20),
     role ENUM('admin', 'teacher', 'student') NOT NULL,
     avatar_url VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_users_role (role),
+    INDEX idx_users_email (email)
 );
 
 -- 2. COURSES: Khóa học
@@ -28,7 +30,8 @@ CREATE TABLE IF NOT EXISTS courses (
     teacher_id VARCHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (teacher_id) REFERENCES users(id)
+    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_courses_code (code)
 );
 
 -- 3. COURSE_ENROLLMENTS: Đăng ký khóa học
@@ -39,54 +42,60 @@ CREATE TABLE IF NOT EXISTS course_enrollments (
     enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE (course_id, student_id)
+    UNIQUE (course_id, student_id),
+    INDEX idx_enrollments_student (student_id)
 );
 
 -- 4. EXAMS: Kỳ thi
 CREATE TABLE IF NOT EXISTS exams (
-    id VARCHAR(36) PRIMARY KEY,         -- Mã kỳ thi (UUID)
-    code VARCHAR(20) NOT NULL UNIQUE,   -- Mã kỳ thi (do admin đặt)
-    name VARCHAR(100) NOT NULL,         -- Tên kỳ thi
-    description TEXT,                   -- Mô tả
-    subject_code VARCHAR(20) NOT NULL,  -- Mã học phần
-    subject_name VARCHAR(100) NOT NULL, -- Tên học phần
-    exam_type VARCHAR(50),              -- Hình thức thi (tự luận, trắc nghiệm, ...)
-    semester VARCHAR(20),               -- Học kỳ
-    duration_minutes INT NOT NULL,      -- Số phút
-    created_by VARCHAR(36) NOT NULL,    -- Người tạo
+    id VARCHAR(36) PRIMARY KEY,
+    code VARCHAR(20) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    subject_code VARCHAR(20) NOT NULL,
+    subject_name VARCHAR(100) NOT NULL,
+    exam_type VARCHAR(50),
+    semester VARCHAR(20),
+    duration_minutes INT NOT NULL,
+    created_by VARCHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES users(id)
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_exams_code (code),
+    INDEX idx_exams_subject (subject_code)
 );
 
--- 5. EXAM_ASSIGNMENTS: Phân công teacher cho exam (Admin quản lý)
+-- 5. EXAM_ASSIGNMENTS: Phân công teacher cho exam
 CREATE TABLE IF NOT EXISTS exam_assignments (
     id VARCHAR(36) PRIMARY KEY,
     exam_id VARCHAR(36) NOT NULL,
     teacher_id VARCHAR(36) NOT NULL,
-    assigned_by VARCHAR(36) NOT NULL,   -- Admin phân công
+    assigned_by VARCHAR(36) NOT NULL,
     assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status ENUM('assigned', 'accepted', 'declined') DEFAULT 'assigned',
-    notes TEXT,                         -- Ghi chú của admin
+    notes TEXT,
     FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
     FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (assigned_by) REFERENCES users(id),
-    UNIQUE (exam_id, teacher_id)
+    FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE (exam_id, teacher_id),
+    INDEX idx_assignments_teacher (teacher_id)
 );
 
 -- 6. SCHEDULES: Lịch thi
 CREATE TABLE IF NOT EXISTS schedules (
     id VARCHAR(36) PRIMARY KEY,
-    exam_id VARCHAR(36) NOT NULL,       -- Tham chiếu đến kỳ thi
-    room VARCHAR(50) NOT NULL,          -- Phòng thi
-    start_time DATETIME NOT NULL,       -- Giờ bắt đầu
-    end_time DATETIME NOT NULL,         -- Giờ kết thúc
+    exam_id VARCHAR( 36) NOT NULL,
+    room VARCHAR(50) NOT NULL,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
+    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+    INDEX idx_schedules_exam (exam_id),
+    INDEX idx_schedules_time (start_time)
 );
 
--- 7. EXAM_REGISTRATIONS: Đăng ký thi (chỉ student được đăng ký)
+-- 7. EXAM_REGISTRATIONS: Đăng ký thi
 CREATE TABLE IF NOT EXISTS exam_registrations (
     id VARCHAR(36) PRIMARY KEY,
     exam_id VARCHAR(36) NOT NULL,
@@ -95,7 +104,8 @@ CREATE TABLE IF NOT EXISTS exam_registrations (
     status ENUM('pending', 'approved', 'rejected', 'cancelled') DEFAULT 'pending',
     FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE (exam_id, student_id)
+    UNIQUE (exam_id, student_id),
+    INDEX idx_registrations_student (student_id)
 );
 
 -- 8. QUESTIONS: Câu hỏi
@@ -105,7 +115,8 @@ CREATE TABLE IF NOT EXISTS questions (
     content TEXT NOT NULL,
     type ENUM('multiple_choice', 'essay') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
+    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+    INDEX idx_questions_exam (exam_id)
 );
 
 -- 9. CHOICES: Đáp án trắc nghiệm
@@ -114,7 +125,8 @@ CREATE TABLE IF NOT EXISTS choices (
     question_id VARCHAR(36) NOT NULL,
     content VARCHAR(255) NOT NULL,
     is_correct BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+    INDEX idx_choices_question (question_id)
 );
 
 -- 10. SUBMISSIONS: Bài nộp
@@ -126,7 +138,9 @@ CREATE TABLE IF NOT EXISTS submissions (
     score DECIMAL(5,2),
     status ENUM('submitted', 'graded', 'reviewed') DEFAULT 'submitted',
     FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
-    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_submissions_student (student_id),
+    INDEX idx_submissions_exam (exam_id)
 );
 
 -- 11. SUBMISSION_ANSWERS: Câu trả lời của học sinh
@@ -138,18 +152,21 @@ CREATE TABLE IF NOT EXISTS submission_answers (
     choice_id VARCHAR(36),
     FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE,
     FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
-    FOREIGN KEY (choice_id) REFERENCES choices(id)
+    FOREIGN KEY (choice_id) REFERENCES choices(id) ON DELETE SET NULL,
+    INDEX idx_submission_answers_submission (submission_id)
 );
 
 -- 12. NOTIFICATIONS: Thông báo
 CREATE TABLE IF NOT EXISTS notifications (
     id VARCHAR(36) PRIMARY KEY,
-    user_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36),
     type ENUM('registration', 'reminder', 'result', 'system', 'assignment', 'other') DEFAULT 'other',
     content TEXT NOT NULL,
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_notifications_user (user_id),
+    INDEX idx_notifications_type (type)
 );
 
 -- =============================
@@ -175,6 +192,14 @@ VALUES
   ('course-1', 'Toán 12', 'Toán học lớp 12', 'MATH12', 'teacher-1'),
   ('course-2', 'Văn 12', 'Ngữ văn lớp 12', 'LIT12', 'teacher-2');
 
+-- COURSE_ENROLLMENTS
+INSERT INTO course_enrollments (id, course_id, student_id)
+VALUES
+  ('enroll-1', 'course-1', 'student-1'),
+  ('enroll-2', 'course-1', 'student-2'),
+  ('enroll-3', 'course-2', 'student-2'),
+  ('enroll-4', 'course-2', 'student-3');
+
 -- EXAMS
 INSERT INTO exams (id, code, name, description, subject_code, subject_name, exam_type, semester, duration_minutes, created_by)
 VALUES
@@ -187,20 +212,12 @@ VALUES
   ('exam-7', 'EXAM-GEOGRAPHY', 'Thi cuối kỳ Địa lý', 'Thi cuối kỳ môn Địa lý', 'GEO12', 'Địa lý 12', 'Trắc nghiệm + Tự luận', 'HK2', 90, 'admin-uuid'),
   ('exam-8', 'EXAM-ENGLISH', 'Thi cuối kỳ Tiếng Anh', 'Thi cuối kỳ môn Tiếng Anh', 'ENG12', 'Tiếng Anh 12', 'Trắc nghiệm + Tự luận', 'HK2', 90, 'admin-uuid');
 
--- EXAM_ASSIGNMENTS: Phân công teacher cho exam
+-- EXAM_ASSIGNMENTS
 INSERT INTO exam_assignments (id, exam_id, teacher_id, assigned_by, status, notes)
 VALUES
   ('assign-1', 'exam-1', 'teacher-1', 'admin-uuid', 'accepted', 'Phân công cho giáo viên Toán'),
   ('assign-2', 'exam-2', 'teacher-2', 'admin-uuid', 'accepted', 'Phân công cho giáo viên Văn'),
   ('assign-3', 'exam-3', 'teacher-1', 'admin-uuid', 'assigned', 'Phân công cho giáo viên Toán (có thể dạy Vật lý)');
-
--- COURSE_ENROLLMENTS
-INSERT INTO course_enrollments (id, course_id, student_id)
-VALUES
-  ('enroll-1', 'course-1', 'student-1'),
-  ('enroll-2', 'course-1', 'student-2'),
-  ('enroll-3', 'course-2', 'student-2'),
-  ('enroll-4', 'course-2', 'student-3');
 
 -- SCHEDULES
 INSERT INTO schedules (id, exam_id, room, start_time, end_time)
@@ -228,4 +245,6 @@ VALUES
   ('noti-4', 'student-3', 'registration', 'Bạn đã đăng ký kỳ thi Văn, chờ xác nhận.', 0),
   ('noti-5', 'teacher-1', 'assignment', 'Bạn được phân công phụ trách kỳ thi Toán.', 0),
   ('noti-6', 'teacher-2', 'assignment', 'Bạn được phân công phụ trách kỳ thi Văn.', 0),
-  ('noti-7', 'teacher-1', 'assignment', 'Bạn được phân công phụ trách kỳ thi Vật lý.', 0);
+  ('noti-7', 'teacher-1', 'assignment', 'Bạn được phân công phụ trách kỳ thi Vật lý.', 0),
+  ('noti-8', NULL, 'system', 'Hệ thống bảo trì định kỳ vào 01:00 ngày 27/07/2025.', 0),
+  ('noti-9', NULL, 'system', 'Cập nhật lịch thi mới cho HK2.', 0);

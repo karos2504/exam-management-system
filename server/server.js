@@ -1,10 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
-const socketIo = require('socket.io');
+const { Server } = require('socket.io');
 require('dotenv').config();
 
-// Import routes
 const authRoutes = require('./routes/auth');
 const examRoutes = require('./routes/exams');
 const registrationRoutes = require('./routes/registrations');
@@ -15,20 +14,30 @@ const assignmentRoutes = require('./routes/assignments');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
+const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
-    methods: ["GET", "POST"]
-  }
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    methods: ['GET', 'POST'],
+  },
 });
 
-// Middleware
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || "http://localhost:3000",
-  credentials: true
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  credentials: true,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Log all incoming requests
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -39,64 +48,117 @@ app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/assignments', assignmentRoutes);
 
-// Health check
+// Test route
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Test route working' });
+});
+
+// Debug registered routes
+app.get('/api/debug/routes', (req, res) => {
+  const routes = [];
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      routes.push({
+        path: middleware.route.path,
+        methods: Object.keys(middleware.route.methods),
+      });
+    } else if (middleware.name === 'router' && middleware.handle.stack) {
+      middleware.handle.stack.forEach((handler) => {
+        if (handler.route) {
+          routes.push({
+            path: middleware.regexp.source + handler.route.path,
+            methods: Object.keys(handler.route.methods),
+          });
+        }
+      });
+    }
+  });
+  res.json({ routes });
+});
+
 app.get('/api/health', (req, res) => {
-  res.json({ 
+  res.json({
     message: 'Server đang hoạt động',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
-// Socket.IO connection
+const userRoles = new Map();
+
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  const userId = socket.handshake.query.userId;
+  const role = socket.handshake.query.role;
 
-  // Join room based on user role
-  socket.on('join-room', (userData) => {
-    socket.join(`user-${userData.id}`);
-    if (userData.role === 'admin' || userData.role === 'teacher') {
-      socket.join('admin-room');
+  if (!userId || !role || !['teacher', 'student', 'admin'].includes(role)) {
+    console.warn('Invalid connection attempt:', { userId, role });
+    socket.disconnect(true);
+    return;
+  }
+
+  console.log(`Client connected: ${socket.id}, user: ${userId} (${role})`);
+  userRoles.set(userId, role);
+  socket.join(`user-${userId}`);
+  socket.join(role);
+
+  socket.on('join-room', ({ userId, role }) => {
+    if (userId && role) {
+      socket.join(`user-${userId}`);
+      socket.join(role);
+      console.log(`User ${userId} (${role}) joined rooms: user-${userId}, ${role}`);
     }
-    console.log(`User ${userData.name} joined room`);
   });
 
-  // Handle exam updates
   socket.on('exam-updated', (data) => {
-    io.to('admin-room').emit('exam-updated', data);
+    io.to('admin').emit('exam-updated', data);
+    console.log('Emitted exam-updated:', data);
   });
 
-  // Handle registration updates
   socket.on('registration-updated', (data) => {
-    io.to('admin-room').emit('registration-updated', data);
+    io.to('admin').emit('registration-updated', data);
     io.to(`user-${data.user_id}`).emit('registration-updated', data);
+    console.log('Emitted registration-updated:', data);
   });
 
-  // Handle schedule updates
   socket.on('schedule-updated', (data) => {
-    io.to('admin-room').emit('schedule-updated', data);
+    io.to('admin').emit('schedule-updated', data);
+    console.log('Emitted schedule-updated:', data);
+  });
+
+  socket.on('notification-created', (data) => {
+    const { id, type, content, user_ids } = data;
+    if (!user_ids || user_ids.length === 0) {
+      io.to('teacher').to('student').emit('notification-created', data);
+      console.log(`Sent notification ${id} to all teachers and students`);
+    } else {
+      user_ids.forEach((user_id) => {
+        const userRole = userRoles.get(user_id);
+        if (['teacher', 'student'].includes(userRole)) {
+          io.to(`user-${user_id}`).emit('notification-created', data);
+          console.log(`Sent notification ${id} to user-${user_id}`);
+        }
+      });
+    }
   });
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
+    console.log(`Client disconnected: ${socket.id}, user: ${userId}`);
+    userRoles.delete(userId);
   });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: 'Có lỗi xảy ra!' });
 });
 
-// 404 handler
 app.use('*', (req, res) => {
+  console.log(`404 for ${req.method} ${req.url}`);
   res.status(404).json({ message: 'API không tồn tại' });
 });
 
 const PORT = process.env.PORT || 5000;
-
 server.listen(PORT, () => {
-  console.log(`Server đang chạy trên port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health`);
+  console.log(`✅ Server chạy: http://localhost:${PORT}`);
 });
 
-module.exports = { app, io }; 
+module.exports = app;
