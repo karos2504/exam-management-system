@@ -8,7 +8,7 @@ const Notifications = () => {
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const response = await api.get('/notifications/user');
+        const response = await api.get('/notifications/');
         setNotifications(response.data.notifications);
       } catch (err) {
         console.error('Error fetching notifications:', err);

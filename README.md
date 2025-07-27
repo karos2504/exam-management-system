@@ -90,7 +90,7 @@ exam-management-system/
     │   │   ├── Schedules.jsx
     │   │   ├── MyRegistrations.jsx
     │   │   └── Registrations.jsx
-    │   ├── context/         # React context
+    │   ├── contexts/         # React contexts
     │   │   └── AuthContext.jsx
     │   └── services/        # API services
     │       ├── api.js

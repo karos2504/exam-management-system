@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 import { CheckCircle, XCircle, Users, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';

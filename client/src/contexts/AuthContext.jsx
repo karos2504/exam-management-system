@@ -5,11 +5,11 @@ import socketService from '../services/socket';
 const AuthContext = createContext();
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
+  const contexts = useContext(AuthContext);
+  if (!contexts) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context;
+  return contexts;
 };
 
 export const AuthProvider = ({ children }) => {
@@ -31,13 +31,13 @@ export const AuthProvider = ({ children }) => {
         try {
           api.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
           const response = await api.get('/auth/profile');
-          const profileUser = response.data.user;
+          const profileUser = response.data.user || response.data;
 
           if (isMounted) {
             setUser(profileUser);
             setToken(savedToken);
 
-            if (['teacher', 'student'].includes(profileUser.role)) {
+            if (['teacher', 'student', 'admin'].includes(profileUser.role)) {
               socketService.connect({ id: profileUser.id, role: profileUser.role });
               socketService.joinRoom({ id: profileUser.id, role: profileUser.role });
             }
@@ -73,7 +73,7 @@ export const AuthProvider = ({ children }) => {
       setToken(newToken);
       setUser(userData);
 
-      if (['teacher', 'student'].includes(userData.role)) {
+      if (['teacher', 'student', 'admin'].includes(userData.role)) {
         socketService.connect({ id: userData.id, role: userData.role });
         socketService.joinRoom({ id: userData.id, role: userData.role });
       }

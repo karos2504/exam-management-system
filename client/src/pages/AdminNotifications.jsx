@@ -7,8 +7,10 @@ import Modal from '../components/UI/Modal';
 import Badge from '../components/UI/Badge';
 import Select from 'react-select';
 import socket from '../services/socket';
+import { useAuth } from '../contexts/AuthContext';
 
 const AdminNotifications = () => {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,23 +19,38 @@ const AdminNotifications = () => {
   const [form, setForm] = useState({ user_ids: [], type: 'system', content: '' });
 
   useEffect(() => {
+    if (!user || !user.id || !user.role) {
+      console.error('Invalid user data for socket connection:', user);
+      toast.error('Vui lòng đăng nhập lại');
+      return;
+    }
+
+    console.log('AdminNotifications: User data:', user);
+    socket.connect({ id: user.id, role: user.role });
     fetchNotifications();
     fetchUsers();
-    socket.connect();
+
+    socket.onNotificationReceived((data) => {
+      console.log('Received notification:', data);
+      setNotifications((prev) => [data, ...prev]);
+      toast.success('Thông báo mới: ' + data.content);
+    });
 
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [user]);
 
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/notifications');
+      console.log('Fetching notifications with token:', localStorage.getItem('token'));
+      const res = await api.get('/notifications/admin');
       const data = Array.isArray(res.data) ? res.data : res.data.notifications || [];
       setNotifications(data);
     } catch (err) {
-      toast.error('Lỗi tải danh sách thông báo');
+      console.error('Error fetching notifications:', err);
+      toast.error(err.response?.data?.message || 'Lỗi tải danh sách thông báo');
     } finally {
       setLoading(false);
     }
@@ -41,11 +58,13 @@ const AdminNotifications = () => {
 
   const fetchUsers = async () => {
     try {
+      console.log('Fetching users with token:', localStorage.getItem('token'));
       const res = await api.get('/users');
       const data = Array.isArray(res.data) ? res.data : res.data.users || [];
       setUsers(data);
     } catch (err) {
-      toast.error('Lỗi tải danh sách người dùng');
+      console.error('Error fetching users:', err);
+      toast.error(err.response?.data?.message || 'Lỗi tải danh sách người dùng');
     }
   };
 
@@ -85,32 +104,39 @@ const AdminNotifications = () => {
     };
 
     try {
-      // Filter user_ids to only include teachers and students
-      const filteredUserIds = payload.user_ids.length > 0
+      let filteredUserIds = payload.user_ids.length > 0
         ? payload.user_ids.filter((id) => {
             const user = users.find((u) => u.id === id);
-            return user && ['teacher', 'student'].includes(user.role);
+            return user && (
+              form.type === 'assignment'
+                ? user.role === 'teacher' // Only teachers for assignments
+                : ['teacher', 'student'].includes(user.role) // Teachers and students for others
+            );
           })
-        : users
-            .filter((u) => ['teacher', 'student'].includes(u.role))
-            .map((u) => u.id);
+        : form.type === 'assignment'
+          ? users
+              .filter((u) => u.role === 'teacher') // Only teachers for assignments
+              .map((u) => u.id)
+          : users
+              .filter((u) => ['teacher', 'student'].includes(u.role)) // All teachers and students
+              .map((u) => u.id);
 
       const sendPayload =
         filteredUserIds.length > 0
           ? { ...payload, user_ids: filteredUserIds }
           : { ...payload, user_ids: undefined };
 
+      console.log('Sending notification payload:', sendPayload);
       if (editing) {
-        await api.delete(`/notifications/${editing.id}`);
-        await api.post('/notifications', sendPayload);
+        await api.delete(`/notifications/admin/${editing.id}`);
+        await api.post('/notifications/admin', sendPayload);
         toast.success('Cập nhật thông báo thành công');
       } else {
-        await api.post('/notifications', sendPayload);
+        await api.post('/notifications/admin', sendPayload);
         toast.success('Thêm thông báo thành công');
       }
 
-      // Gửi socket thông báo đến client (chỉ cho teacher và student)
-      socket.emit('notification-created', {
+      socket.emitNotification({
         type: payload.type,
         content: payload.content,
         user_ids: filteredUserIds.length > 0 ? filteredUserIds : [],
@@ -119,6 +145,7 @@ const AdminNotifications = () => {
       fetchNotifications();
       closeModal();
     } catch (err) {
+      console.error('Error saving notification:', err);
       toast.error(err.response?.data?.message || 'Lỗi lưu thông báo');
     }
   };
@@ -126,11 +153,12 @@ const AdminNotifications = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Xác nhận xóa thông báo?')) return;
     try {
-      await api.delete(`/notifications/${id}`);
+      await api.delete(`/notifications/admin/${id}`);
       toast.success('Xóa thông báo thành công');
       fetchNotifications();
     } catch (err) {
-      toast.error('Lỗi xóa thông báo');
+      console.error('Error deleting notification:', err);
+      toast.error(err.response?.data?.message || 'Lỗi xóa thông báo');
     }
   };
 
@@ -225,7 +253,6 @@ const AdminNotifications = () => {
         </div>
       )}
 
-      {/* Modal */}
       <Modal isOpen={showModal} onClose={closeModal} title={editing ? 'Sửa thông báo' : 'Thêm thông báo'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

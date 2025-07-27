@@ -33,7 +33,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Log all incoming requests
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -48,12 +47,10 @@ app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/assignments', assignmentRoutes);
 
-// Test route
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Test route working' });
 });
 
-// Debug registered routes
 app.get('/api/debug/routes', (req, res) => {
   const routes = [];
   app._router.stack.forEach((middleware) => {
@@ -63,10 +60,11 @@ app.get('/api/debug/routes', (req, res) => {
         methods: Object.keys(middleware.route.methods),
       });
     } else if (middleware.name === 'router' && middleware.handle.stack) {
+      const prefix = middleware.regexp.source.replace(/\\\//g, '/').replace(/^\/\^|\/\.\*\$/g, '');
       middleware.handle.stack.forEach((handler) => {
         if (handler.route) {
           routes.push({
-            path: middleware.regexp.source + handler.route.path,
+            path: `${prefix}${handler.route.path}`,
             methods: Object.keys(handler.route.methods),
           });
         }
@@ -147,8 +145,8 @@ io.on('connection', (socket) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Có lỗi xảy ra!' });
+  console.error('Server error:', err.stack);
+  res.status(500).json({ message: 'Có lỗi xảy ra!', error: err.message });
 });
 
 app.use('*', (req, res) => {

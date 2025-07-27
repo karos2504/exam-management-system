@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Home, BookOpen, Calendar, Users, Settings, LogOut, Menu, X, User, Bell, Briefcase } from 'lucide-react';
 import socket from '../services/socket';
 import toast from 'react-hot-toast';
