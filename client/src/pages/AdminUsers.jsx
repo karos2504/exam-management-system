@@ -108,9 +108,10 @@ const AdminUsers = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{u.email}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{u.phone}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={u.role === 'admin' ? 'danger' : u.role === 'teacher' ? 'warning' : 'success'}>
-                          {u.role}
-                        </Badge>
+                        <Badge
+                          type={u.role === 'admin' ? 'danger' : u.role === 'teacher' ? 'warning' : 'success'}
+                          text={u.role}
+                        />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {u.avatar_url && <img src={u.avatar_url} alt="avatar" className="w-8 h-8 rounded-full" />}

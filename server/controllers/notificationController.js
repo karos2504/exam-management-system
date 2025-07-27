@@ -1,159 +1,191 @@
-const db = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
+const pool = require('../config/database');
 
-module.exports = {
-  getUnreadCount: async (req, res) => {
+const notificationController = {
+  async getAllNotifications(req, res, next) {
     try {
-      console.log(`Executing getUnreadCount for user: ${req.user.id}`);
-      const [rows] = await db.query(
-        'SELECT COUNT(*) as count FROM notifications WHERE (user_id = ? OR user_id IS NULL) AND is_read = 0',
-        [req.user.id]
-      );
-      console.log(`Unread count for user ${req.user.id}: ${rows[0].count}`);
-      res.json({ success: true, count: rows[0].count });
-    } catch (err) {
-      console.error('Error fetching unread count:', err);
-      res.status(500).json({ success: false, message: 'Lỗi lấy số lượng thông báo chưa đọc', error: err.message });
-    }
-  },
-
-  getUserNotifications: async (req, res) => {
-    try {
-      const { type } = req.query;
-      let sql = 'SELECT * FROM notifications WHERE (user_id = ? OR user_id IS NULL)';
-      const params = [req.user.id];
-      if (type) {
-        sql += ' AND type = ?';
-        params.push(type);
-      }
-      sql += ' ORDER BY created_at DESC';
-      console.log(`Executing getUserNotifications for user: ${req.user.id}`, { sql, params });
-      const [notifications] = await db.query(sql, params);
-      res.json({ success: true, notifications });
-    } catch (err) {
-      console.error('Error fetching user notifications:', err);
-      res.status(500).json({ success: false, message: 'Lỗi lấy danh sách thông báo', error: err.message });
-    }
-  },
-
-  getAllNotifications: async (req, res) => {
-    try {
-      console.log(`Executing getAllNotifications for user: ${req.user.id}`);
-      const [notifications] = await db.query('SELECT * FROM notifications ORDER BY created_at DESC');
+      const [notifications] = await pool.execute(`
+        SELECT n.*, u.full_name AS recipient_name
+        FROM notifications n
+        LEFT JOIN users u ON n.user_id = u.id
+        ORDER BY n.created_at DESC
+      `);
       res.json({ success: true, notifications });
     } catch (err) {
       console.error('Error fetching all notifications:', err);
-      res.status(500).json({ success: false, message: 'Lỗi lấy danh sách thông báo', error: err.message });
+      res.status(500).json({ message: 'Lỗi server' });
     }
   },
 
-  createNotification: async (req, res) => {
+  async createNotification(req, res, next) {
     try {
-      const { type, content, user_ids } = req.body;
-      if (!type || !content) {
-        return res.status(400).json({ success: false, message: 'Thiếu thông tin bắt buộc' });
-      }
+      const { type, content, user_ids, exam_id } = req.body;
       const notifications = [];
+
       if (user_ids && user_ids.length > 0) {
         for (const user_id of user_ids) {
-          const [rows] = await db.query('SELECT id FROM users WHERE id = ? AND role IN (?, ?)', [user_id, 'teacher', 'student']);
-          if (rows.length === 0) {
-            console.warn(`Invalid user_id: ${user_id}`);
-            continue;
-          }
-          const notification = {
-            id: uuidv4(),
-            type,
-            content,
-            user_id,
-            created_at: new Date(),
-            is_read: false,
-          };
-          await db.query('INSERT INTO notifications SET ?', notification);
-          notifications.push(notification);
-          console.log(`Created notification ${notification.id} for user-${user_id}`);
-          req.io.to(`user-${user_id}`).emit('notification-created', notification);
+          const [users] = await pool.execute('SELECT * FROM users WHERE id = ?', [user_id]);
+          if (users.length === 0) continue;
+
+          const notificationId = uuidv4();
+          await pool.execute(
+            'INSERT INTO notifications (id, user_id, type, content, exam_id) VALUES (?, ?, ?, ?, ?)',
+            [notificationId, user_id, type, content, exam_id || null]
+          );
+          notifications.push({ id: notificationId, user_id, type, content, exam_id, created_at: new Date(), is_read: false });
         }
       } else {
-        const notification = {
-          id: uuidv4(),
-          type,
-          content,
-          user_id: null,
-          created_at: new Date(),
-          is_read: false,
-        };
-        await db.query('INSERT INTO notifications SET ?', notification);
-        notifications.push(notification);
-        console.log(`Created notification ${notification.id} for all users`);
-        req.io.to('teacher').to('student').emit('notification-created', notification);
+        const notificationId = uuidv4();
+        await pool.execute(
+          'INSERT INTO notifications (id, user_id, type, content, exam_id) VALUES (?, NULL, ?, ?, ?)',
+          [notificationId, type, content, exam_id || null]
+        );
+        notifications.push({ id: notificationId, user_id: null, type, content, exam_id, created_at: new Date(), is_read: false });
       }
-      res.json({ success: true, notifications });
+
+      if (req.io) {
+        notifications.forEach((notification) => {
+          if (notification.user_id) {
+            req.io.to(`user-${notification.user_id}`).emit('notification-created', notification);
+            console.log(`Sent notification ${notification.id} to user-${notification.user_id}`);
+          } else {
+            req.io.to('teacher').to('student').emit('notification-created', notification);
+            console.log(`Sent notification ${notification.id} to all teachers and students`);
+          }
+        });
+      }
+
+      res.status(201).json({ success: true, message: 'Tạo thông báo thành công', notifications });
     } catch (err) {
       console.error('Error creating notification:', err);
-      res.status(500).json({ success: false, message: 'Lỗi tạo thông báo', error: err.message });
+      res.status(500).json({ message: 'Lỗi server' });
     }
   },
 
-  getNotificationById: async (req, res) => {
+  async getUserNotifications(req, res, next) {
+    try {
+      const user_id = req.user.id;
+      const [notifications] = await pool.execute(
+        `SELECT * FROM notifications WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC`,
+        [user_id]
+      );
+      res.json({ success: true, notifications });
+    } catch (err) {
+      console.error('Error fetching user notifications:', err);
+      res.status(500).json({ message: 'Lỗi server' });
+    }
+  },
+
+  async getNotificationById(req, res, next) {
     try {
       const { id } = req.params;
-      const [notifications] = await db.query('SELECT * FROM notifications WHERE id = ?', [id]);
+      const [notifications] = await pool.execute(
+        'SELECT * FROM notifications WHERE id = ?',
+        [id]
+      );
       if (notifications.length === 0) {
-        return res.status(404).json({ success: false, message: 'Không tìm thấy thông báo' });
+        return res.status(404).json({ message: 'Không tìm thấy thông báo' });
       }
       res.json({ success: true, notification: notifications[0] });
     } catch (err) {
       console.error('Error fetching notification:', err);
-      res.status(500).json({ success: false, message: 'Lỗi lấy thông báo', error: err.message });
+      res.status(500).json({ message: 'Lỗi server' });
     }
   },
 
-  updateNotification: async (req, res) => {
+  async updateNotification(req, res, next) {
     try {
       const { id } = req.params;
-      const { type, content, user_id } = req.body;
-      const [notifications] = await db.query('SELECT * FROM notifications WHERE id = ?', [id]);
+      const { type, content, user_id, exam_id } = req.body;
+
+      const [notifications] = await pool.execute(
+        'SELECT * FROM notifications WHERE id = ?',
+        [id]
+      );
       if (notifications.length === 0) {
-        return res.status(404).json({ success: false, message: 'Không tìm thấy thông báo' });
+        return res.status(404).json({ message: 'Không tìm thấy thông báo' });
       }
-      const updates = { type, content, user_id };
-      await db.query('UPDATE notifications SET ? WHERE id = ?', [updates, id]);
-      const [updated] = await db.query('SELECT * FROM notifications WHERE id = ?', [id]);
-      res.json({ success: true, notification: updated[0] });
+
+      await pool.execute(
+        'UPDATE notifications SET type = ?, content = ?, user_id = ?, exam_id = ? WHERE id = ?',
+        [type, content, user_id || null, exam_id || null, id]
+      );
+
+      const [updated] = await pool.execute('SELECT * FROM notifications WHERE id = ?', [id]);
+
+      if (req.io) {
+        if (updated[0].user_id) {
+          req.io.to(`user-${updated[0].user_id}`).emit('notification-created', updated[0]);
+          console.log(`Sent updated notification ${id} to user-${updated[0].user_id}`);
+        } else {
+          req.io.to('teacher').to('student').emit('notification-created', updated[0]);
+          console.log(`Sent updated notification ${id} to all teachers and students`);
+        }
+      }
+
+      res.json({ success: true, message: 'Cập nhật thông báo thành công', notification: updated[0] });
     } catch (err) {
       console.error('Error updating notification:', err);
-      res.status(500).json({ success: false, message: 'Lỗi cập nhật thông báo', error: err.message });
+      res.status(500).json({ message: 'Lỗi server' });
     }
   },
 
-  deleteNotification: async (req, res) => {
+  async deleteNotification(req, res, next) {
     try {
       const { id } = req.params;
-      const [notifications] = await db.query('SELECT * FROM notifications WHERE id = ?', [id]);
+
+      const [notifications] = await pool.execute('SELECT * FROM notifications WHERE id = ?', [id]);
       if (notifications.length === 0) {
-        return res.status(404).json({ success: false, message: 'Không tìm thấy thông báo' });
+        return res.status(404).json({ message: 'Không tìm thấy thông báo' });
       }
-      await db.query('DELETE FROM notifications WHERE id = ?', [id]);
+
+      await pool.execute('DELETE FROM notifications WHERE id = ?', [id]);
+
       res.json({ success: true, message: 'Xóa thông báo thành công' });
     } catch (err) {
       console.error('Error deleting notification:', err);
-      res.status(500).json({ success: false, message: 'Lỗi xóa thông báo', error: err.message });
+      res.status(500).json({ message: 'Lỗi server' });
     }
   },
 
-  markAsRead: async (req, res) => {
+  async markAsRead(req, res, next) {
     try {
       const { id } = req.params;
-      const [notifications] = await db.query('SELECT * FROM notifications WHERE id = ? AND (user_id = ? OR user_id IS NULL)', [id, req.user.id]);
+      const user_id = req.user.id;
+
+      const [notifications] = await pool.execute(
+        'SELECT * FROM notifications WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
+        [id, user_id]
+      );
       if (notifications.length === 0) {
-        return res.status(404).json({ success: false, message: 'Không tìm thấy thông báo' });
+        return res.status(404).json({ message: 'Không tìm thấy thông báo hoặc không có quyền' });
       }
-      await db.query('UPDATE notifications SET is_read = 1 WHERE id = ?', [id]);
-      res.json({ success: true, message: 'Đánh dấu đã đọc thành công' });
+
+      await pool.execute(
+        'UPDATE notifications SET is_read = ? WHERE id = ?',
+        [true, id]
+      );
+
+      res.json({ success: true, message: 'Đánh dấu thông báo đã đọc' });
     } catch (err) {
       console.error('Error marking notification as read:', err);
-      res.status(500).json({ success: false, message: 'Lỗi đánh dấu đã đọc', error: err.message });
+      res.status(500).json({ message: 'Lỗi server' });
+    }
+  },
+
+  async getUnreadCount(req, res, next) {
+    try {
+      const user_id = req.user.id;
+      const [result] = await pool.execute(
+        'SELECT COUNT(*) AS count FROM notifications WHERE (user_id = ? OR user_id IS NULL) AND is_read = ?',
+        [user_id, false]
+      );
+      res.json({ success: true, count: result[0].count });
+    } catch (err) {
+      console.error('Error fetching unread count:', err);
+      res.status(500).json({ message: 'Lỗi server' });
     }
   },
 };
+
+module.exports = notificationController;

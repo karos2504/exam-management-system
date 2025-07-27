@@ -5,27 +5,23 @@ const { auth, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Validation rules
 const registrationValidation = [
-  body('exam_id').isInt().withMessage('ID kỳ thi không hợp lệ')
+  body('exam_id').isUUID().withMessage('ID kỳ thi không hợp lệ'),
 ];
 
-// Routes - Tất cả routes đều cần xác thực
 router.use(auth);
 
-// Đăng ký thi (chỉ student)
+// Student can register for an exam
 router.post('/', authorize('student'), registrationValidation, registrationController.registerForExam);
-
-// Hủy đăng ký thi (chỉ student)
+// Student can cancel their registration
 router.delete('/:exam_id', authorize('student'), registrationController.cancelRegistration);
-
-// Lấy danh sách đăng ký của người dùng (tất cả roles)
-router.get('/my-registrations', registrationController.getUserRegistrations);
-
-// Lấy danh sách đăng ký cho kỳ thi (chỉ teacher, admin)
+// Student can view their own registrations
+router.get('/my-registrations', authorize('student'), registrationController.getUserRegistrations); // Ensure 'student' authorize for this
+// Teacher/Admin can view all registrations for a specific exam
 router.get('/exam/:exam_id', authorize('teacher', 'admin'), registrationController.getExamRegistrations);
-
-// Xác nhận đăng ký (chỉ teacher, admin)
+// Teacher/Admin can confirm a registration
 router.put('/confirm/:registration_id', authorize('teacher', 'admin'), registrationController.confirmRegistration);
+// Teacher/Admin can reject a registration
+router.put('/reject/:registration_id', authorize('teacher', 'admin'), registrationController.rejectRegistration);
 
-module.exports = router; 
+module.exports = router;

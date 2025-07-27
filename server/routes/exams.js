@@ -1,11 +1,10 @@
 const express = require('express');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator'); // Import param for validating params like :id
 const examController = require('../controllers/examController');
 const { auth, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Validation rules
 const examValidation = [
   body('code')
     .notEmpty()
@@ -46,22 +45,23 @@ const examValidation = [
     .withMessage('Thời gian thi phải là số nguyên dương'),
 ];
 
-// Routes - All routes require authentication
+const assignmentValidation = [
+  // Ensure that these body fields are string UUIDs from the frontend
+  body('exam_id').isUUID().withMessage('ID kỳ thi không hợp lệ'),
+  body('teacher_id').isUUID().withMessage('ID giáo viên không hợp lệ'),
+  body('notes').optional().isLength({ max: 1000 }).withMessage('Ghi chú tối đa 1000 ký tự'),
+];
+
 router.use(auth);
 
-// Get all exams (all roles)
+// Add validation for :id parameter where appropriate
 router.get('/', examController.getAllExams);
-
-// Get exam by ID (all roles)
-router.get('/:id', examController.getExamById);
-
-// Create new exam (teacher, admin only)
+router.get('/:id', param('id').isUUID().withMessage('ID kỳ thi không hợp lệ'), examController.getExamById);
 router.post('/', authorize('teacher', 'admin'), examValidation, examController.createExam);
-
-// Update exam (creator or admin only)
-router.put('/:id', authorize('teacher', 'admin'), examValidation, examController.updateExam);
-
-// Delete exam (creator or admin only)
-router.delete('/:id', authorize('teacher', 'admin'), examController.deleteExam);
+router.put('/:id', authorize('teacher', 'admin'), param('id').isUUID().withMessage('ID kỳ thi không hợp lệ'), examValidation, examController.updateExam);
+router.delete('/:id', authorize('teacher', 'admin'), param('id').isUUID().withMessage('ID kỳ thi không hợp lệ'), examController.deleteExam);
+router.post('/assign', authorize('admin'), assignmentValidation, examController.assignTeacher);
+router.put('/assign/:assignment_id/accept', authorize('teacher'), param('assignment_id').isUUID().withMessage('ID phân công không hợp lệ'), examController.acceptAssignment);
+router.put('/assign/:assignment_id/decline', authorize('teacher'), param('assignment_id').isUUID().withMessage('ID phân công không hợp lệ'), examController.declineAssignment);
 
 module.exports = router;

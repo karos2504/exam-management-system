@@ -17,10 +17,11 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Ensure PUT/DELETE are allowed for API calls
   },
 });
 
+// Middleware to attach io to req
 app.use((req, res, next) => {
   req.io = io;
   next();
@@ -106,19 +107,26 @@ io.on('connection', (socket) => {
     }
   });
 
+  // These are client-side socket.emit events, re-emitted by server to specific rooms
   socket.on('exam-updated', (data) => {
-    io.to('admin').emit('exam-updated', data);
+    io.to('admin').emit('exam-updated', data); // Admins
+    io.to('teacher').emit('exam-updated', data); // Teachers (if they need to see updates)
+    io.to('student').emit('exam-updated', data); // Students (if they need to see updates, e.g., if exam details changed)
     console.log('Emitted exam-updated:', data);
   });
 
-  socket.on('registration-updated', (data) => {
+  socket.on('registration-updated', (data) => { // This event is from the frontend (Registrations.jsx), typically for admin actions
     io.to('admin').emit('registration-updated', data);
-    io.to(`user-${data.user_id}`).emit('registration-updated', data);
+    if (data.user_id) { // If specific user involved in registration status change
+      io.to(`user-${data.user_id}`).emit('registration-updated', data);
+    }
     console.log('Emitted registration-updated:', data);
   });
 
   socket.on('schedule-updated', (data) => {
     io.to('admin').emit('schedule-updated', data);
+    io.to('teacher').emit('schedule-updated', data); // Teachers might need schedule updates
+    io.to('student').emit('schedule-updated', data); // Students definitely need schedule updates
     console.log('Emitted schedule-updated:', data);
   });
 
@@ -137,6 +145,10 @@ io.on('connection', (socket) => {
       });
     }
   });
+
+  // No specific socket.on for 'exam-registration-count-updated' needed here,
+  // as the backend controller (registrationController.js) will directly
+  // use req.io.emit() to broadcast this event.
 
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}, user: ${userId}`);
