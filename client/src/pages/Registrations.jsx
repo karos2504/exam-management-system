@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
-import { CheckCircle, XCircle, Users, Eye, Ban } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { CheckCircle, XCircle, Users } from 'lucide-react';
+import toast from 'react-hot-toast'; // Keep this import for react-hot-toast
 import Button from '../components/UI/Button';
 import Modal from '../components/UI/Modal';
 import Loading from '../components/UI/Loading';
-import Toast from '../components/UI/Toast';
-import Badge from '../components/UI/Badge'; // Make sure this import is present
+import Badge from '../components/UI/Badge';
 
 const Registrations = () => {
   const { user } = useAuth();
@@ -16,9 +15,9 @@ const Registrations = () => {
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // State for potential modal for rejection/cancellation details
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [currentRegistrationToReject, setCurrentRegistrationToReject] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     fetchExams();
@@ -40,7 +39,7 @@ const Registrations = () => {
         setLoading(false);
       }
     } catch (error) {
-      toast.error('Lỗi khi tải danh sách kỳ thi.');
+      toast.error('Lỗi khi tải danh sách kỳ thi.'); // Using react-hot-toast
       setLoading(false);
     }
   };
@@ -51,54 +50,64 @@ const Registrations = () => {
       const response = await api.get(`/registrations/exam/${examId}`);
       setRegistrations(response.data.registrations);
     } catch (error) {
-      toast.error('Lỗi khi tải danh sách đăng ký.');
+      toast.error('Lỗi khi tải danh sách đăng ký.'); // Using react-hot-toast
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateRegistrationStatus = async (registrationId, newStatus) => {
+  const handleUpdateRegistrationStatus = async (registrationId, newStatus, reason = null) => {
     try {
-      await api.put(`/registrations/${registrationId}/status`, { status: newStatus });
-      toast.success(`Cập nhật trạng thái thành công: ${newStatus === 'approved' ? 'Đã xác nhận' : newStatus === 'rejected' ? 'Đã từ chối' : 'Đã hủy'}`);
+      await api.put(`/registrations/confirm/${registrationId}`, { status: newStatus, rejection_reason: reason });
+      toast.success(`Cập nhật trạng thái thành công: ${newStatus === 'approved' ? 'Đã xác nhận' : newStatus === 'rejected' ? 'Đã từ chối' : 'Đã hủy'}`); // Using react-hot-toast
       fetchRegistrations(selectedExam);
+      setShowRejectModal(false);
+      setCurrentRegistrationToReject(null);
+      setRejectionReason('');
     } catch (error) {
-      toast.error(`Lỗi khi cập nhật trạng thái: ${error.response?.data?.message || error.message}`);
+      toast.error(`Lỗi khi cập nhật trạng thái: ${error.response?.data?.message || error.message}`); // Using react-hot-toast
     }
   };
 
-  // --- START OF THE CRUCIAL CHANGE ---
+  const openRejectModal = (registration) => {
+    setCurrentRegistrationToReject(registration);
+    setRejectionReason('');
+    setShowRejectModal(true);
+  };
+
+  const confirmReject = () => {
+    if (currentRegistrationToReject) {
+      handleUpdateRegistrationStatus(currentRegistrationToReject.id, 'rejected', rejectionReason);
+    }
+  };
+
   const getStatusBadge = (status) => {
     let badgeText = '';
-    let badgeType = 'default'; // default to gray if no match
+    let badgeType = 'default';
 
     switch (status) {
       case 'pending':
         badgeText = 'Chờ xác nhận';
-        badgeType = 'warning'; // Maps to yellow in your Badge component
+        badgeType = 'warning';
         break;
       case 'approved':
         badgeText = 'Đã xác nhận';
-        badgeType = 'success'; // Maps to green in your Badge component
+        badgeType = 'success';
         break;
       case 'rejected':
         badgeText = 'Đã từ chối';
-        badgeType = 'error'; // Maps to red in your Badge component
+        badgeType = 'error';
         break;
       case 'cancelled':
         badgeText = 'Đã hủy';
-        badgeType = 'default'; // Or 'info' if you want a blueish tint
+        badgeType = 'default';
         break;
       default:
         badgeText = 'Không rõ';
         badgeType = 'default';
     }
-
-    // Now correctly pass props to your Badge component
     return <Badge text={badgeText} type={badgeType} />;
   };
-  // --- END OF THE CRUCIAL CHANGE ---
-
 
   const formatDateTime = (dateTime) => {
     return new Date(dateTime).toLocaleString('vi-VN');
@@ -114,7 +123,8 @@ const Registrations = () => {
 
   return (
     <div className="space-y-6">
-      <Toast />
+      {/* Remove the problematic line here: */}
+      {/* <Toast /> */} {/* <-- DELETED THIS LINE */}
 
       {/* Header */}
       <div>
@@ -215,7 +225,7 @@ const Registrations = () => {
                                 <CheckCircle className="h-4 w-4" />
                               </button>
                               <button
-                                onClick={() => handleUpdateRegistrationStatus(registration.id, 'rejected')}
+                                onClick={() => openRejectModal(registration)}
                                 className="text-red-600 hover:text-red-900"
                                 title="Từ chối đăng ký"
                               >
@@ -243,6 +253,44 @@ const Registrations = () => {
           )}
         </div>
       </div>
+
+      {/* Reject Registration Modal */}
+      {showRejectModal && (
+        <Modal
+          isOpen={showRejectModal}
+          onClose={() => setShowRejectModal(false)}
+          title="Từ chối đăng ký"
+        >
+          <p className="mb-4">Bạn có chắc chắn muốn từ chối đăng ký của **{currentRegistrationToReject?.student_name}** cho kỳ thi **{exams.find(e => e.id === selectedExam)?.name}** không?</p>
+          <div className="mb-4">
+            <label htmlFor="rejectionReason" className="block text-sm font-medium text-gray-700 mb-1">Lý do từ chối (Tùy chọn):</label>
+            <textarea
+              id="rejectionReason"
+              rows="3"
+              className="input-field w-full"
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Nhập lý do từ chối..."
+            ></textarea>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowRejectModal(false)}
+            >
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={confirmReject}
+            >
+              Xác nhận từ chối
+            </Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

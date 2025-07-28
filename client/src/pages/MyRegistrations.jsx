@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import Button from '../components/UI/Button';
 import Modal from '../components/UI/Modal';
 import Loading from '../components/UI/Loading';
-import Toast from '../components/UI/Toast';
+// import Toast from '../components/UI/Toast'; // <--- Correctly commented out or deleted
 import Badge from '../components/UI/Badge';
 
 const MyRegistrations = () => {
@@ -29,14 +29,15 @@ const MyRegistrations = () => {
     }
   };
 
-  const handleCancelRegistration = async (examId) => {
+  const handleCancelRegistration = async (registrationId) => {
     if (window.confirm('Bạn có chắc muốn hủy đăng ký kỳ thi này?')) {
       try {
-        await api.delete(`/registrations/${examId}`);
+        // FIX IS HERE: Changed to api.delete and removed '/cancel' from the path
+        await api.delete(`/registrations/${registrationId}`);
         toast.success('Hủy đăng ký thành công');
-        fetchRegistrations();
+        fetchRegistrations(); // Re-fetch registrations to update UI
       } catch (error) {
-        toast.error('Lỗi khi hủy đăng ký');
+        toast.error(error.response?.data?.message || 'Lỗi khi hủy đăng ký'); // Added error message from response
       }
     }
   };
@@ -44,30 +45,25 @@ const MyRegistrations = () => {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'pending':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-            Chờ xác nhận
-          </span>
-        );
-      case 'confirmed':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            Đã xác nhận
-          </span>
-        );
+        return <Badge text="Chờ xác nhận" type="warning" />;
+      case 'approved':
+        return <Badge text="Đã xác nhận" type="success" />;
+      case 'rejected':
+        return <Badge text="Đã từ chối" type="error" />;
       case 'cancelled':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-            Đã hủy
-          </span>
-        );
+        return <Badge text="Đã hủy" type="default" />;
       default:
         return null;
     }
   };
 
   const formatDateTime = (dateTime) => {
-    return new Date(dateTime).toLocaleString('vi-VN');
+    // Ensure the date is correctly parsed to avoid "Invalid Date" on some browsers
+    const date = new Date(dateTime);
+    if (isNaN(date.getTime())) {
+      return 'Thời gian không hợp lệ';
+    }
+    return date.toLocaleString('vi-VN');
   };
 
   if (loading) {
@@ -104,10 +100,11 @@ const MyRegistrations = () => {
                         {getStatusBadge(registration.status)}
                       </div>
                       <p className="text-sm text-gray-600 mb-3">
-                        Môn thi: {registration.subject}
+                        Môn thi: {registration.subject_name}
                       </p>
-                      
-                      {registration.room && registration.start_time && (
+
+                      {/* Display room and time ONLY IF STATUS IS 'approved' */}
+                      {registration.status === 'approved' && registration.room && registration.start_time && (
                         <div className="space-y-2">
                           <div className="flex items-center text-sm text-gray-600">
                             <MapPin className="h-4 w-4 mr-2" />
@@ -119,20 +116,27 @@ const MyRegistrations = () => {
                           </div>
                         </div>
                       )}
-                      
+
+                      {registration.status === 'rejected' && registration.rejection_reason && (
+                        <div className="mt-2 text-sm text-red-600">
+                          Lý do từ chối: {registration.rejection_reason}
+                        </div>
+                      )}
+
                       <div className="mt-3 text-xs text-gray-500">
                         Đăng ký lúc: {formatDateTime(registration.registered_at)}
                       </div>
                     </div>
-                    
+
                     <div className="ml-4">
                       {registration.status === 'pending' && (
-                        <button
-                          onClick={() => handleCancelRegistration(registration.exam_id)}
-                          className="btn-danger text-sm"
+                        <Button
+                          onClick={() => handleCancelRegistration(registration.id)}
+                          variant="danger"
+                          size="sm"
                         >
                           Hủy đăng ký
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -156,4 +160,4 @@ const MyRegistrations = () => {
   );
 };
 
-export default MyRegistrations; 
+export default MyRegistrations;

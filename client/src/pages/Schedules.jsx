@@ -1,12 +1,14 @@
+// src/components/Schedules.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
 import socketService from '@/services/socket';
 import { Plus, BookOpen, Edit, Trash2, Calendar, Eye } from 'lucide-react';
-import toast from 'react-hot-toast';
+import toast from 'react-hot-toast'; // Đã có react-hot-toast
 import Button from '@/components/UI/Button';
 import Modal from '@/components/UI/Modal';
 import Loading from '@/components/UI/Loading';
+// import Toast from '@/components/UI/Toast'; // <--- XÓA DÒNG NÀY ĐI
 import Badge from '@/components/UI/Badge';
 
 const Schedules = () => {
@@ -61,7 +63,8 @@ const Schedules = () => {
     try {
       const { room, start_time, end_time } = formData;
       const exclude_id = editingSchedule ? editingSchedule.id : undefined;
-      const response = await api.get('/api/schedules/check-conflict', {
+      // Make sure your backend endpoint is correct here (e.g., /schedules/check-conflict)
+      const response = await api.get('/schedules/check-conflict', { // Removed /api/ from path
         params: { room, start_time, end_time, exclude_id },
       });
       if (response.data.has_conflict) {
@@ -87,12 +90,11 @@ const Schedules = () => {
       if (end <= start) errors.end_time = 'Thời gian kết thúc phải sau thời gian bắt đầu';
     }
 
-    // Check for schedule conflicts
     const conflicts = await checkScheduleConflict();
     if (conflicts.length > 0) {
       errors.conflict = `Phòng thi đã được sử dụng trong khoảng thời gian này: ${conflicts
-        .map((c) => `${c.exam_name} (${c.start_time} - ${c.end_time})`)
-        .join(', ')}`;
+        .map((c) => `${c.exam_name} (${formatDateTime(c.start_time)} - ${formatDateTime(c.end_time)})`)
+        .join(', ')}`; // Format conflict times for better readability
     }
 
     setFormErrors(errors);
@@ -109,11 +111,13 @@ const Schedules = () => {
       const payload = { ...formData };
       let response;
       if (editingSchedule) {
-        response = await api.put(`/api/schedules/${editingSchedule.id}`, payload);
+        // Make sure your backend endpoint is correct here (e.g., /schedules/:id)
+        response = await api.put(`/schedules/${editingSchedule.id}`, payload); // Removed /api/ from path
         socketService.emitScheduleUpdate(response.data.schedule);
         toast.success('Cập nhật lịch thi thành công');
       } else {
-        response = await api.post('/api/schedules', payload);
+        // Make sure your backend endpoint is correct here (e.g., /schedules)
+        response = await api.post('/schedules', payload); // Removed /api/ from path
         socketService.emitScheduleUpdate(response.data.schedule);
         toast.success('Tạo lịch thi thành công');
       }
@@ -137,14 +141,13 @@ const Schedules = () => {
     setShowViewModal(true);
   };
 
-
   const handleEdit = (schedule) => {
     setEditingSchedule(schedule);
     setFormData({
       exam_id: schedule.exam_id,
       room: schedule.room,
-      start_time: schedule.start_time.slice(0, 16),
-      end_time: schedule.end_time.slice(0, 16),
+      start_time: schedule.start_time ? schedule.start_time.slice(0, 16) : '', // Ensure start_time exists before slicing
+      end_time: schedule.end_time ? schedule.end_time.slice(0, 16) : '', // Ensure end_time exists before slicing
     });
     setShowModal(true);
     setFormErrors({});
@@ -153,7 +156,8 @@ const Schedules = () => {
   const handleDelete = async (scheduleId) => {
     if (window.confirm('Bạn có chắc muốn xóa lịch thi này?')) {
       try {
-        await api.delete(`/api/schedules/${scheduleId}`);
+        // Make sure your backend endpoint is correct here (e.g., /schedules/:id)
+        await api.delete(`/schedules/${scheduleId}`); // Removed /api/ from path
         toast.success('Xóa lịch thi thành công');
         fetchData();
       } catch (error) {
@@ -163,11 +167,13 @@ const Schedules = () => {
     }
   };
 
-  const handleView = (schedule) => {
-    toast.info(`Xem chi tiết lịch thi: ${schedule.exam_name} - ${schedule.room}`);
-  };
+  // Removed handleView as it was replaced by handleViewSchedule with modal
+  // const handleView = (schedule) => {
+  //   toast.info(`Xem chi tiết lịch thi: ${schedule.exam_name} - ${schedule.room}`);
+  // };
 
   const formatDateTime = (dateTime) => {
+    if (!dateTime) return ''; // Handle null or undefined dateTime
     return new Date(dateTime).toLocaleString('vi-VN', {
       dateStyle: 'short',
       timeStyle: 'short',

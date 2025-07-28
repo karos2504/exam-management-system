@@ -96,20 +96,25 @@ const registrationController = {
 
   async cancelRegistration(req, res) {
     try {
-      const { exam_id } = req.params;
+      // Receive registration_id from params, not exam_id directly for cancellation
+      const { registration_id } = req.params;
       const student_id = req.user.id;
 
+      // Find the specific registration by its ID and student_id
       const [registrations] = await pool.execute(
-        'SELECT * FROM exam_registrations WHERE student_id = ? AND exam_id = ? AND status IN ("pending", "approved")',
-        [student_id, exam_id]
+        'SELECT r.*, e.name AS exam_name FROM exam_registrations r JOIN exams e ON r.exam_id = e.id WHERE r.id = ? AND r.student_id = ? AND r.status IN ("pending", "approved")',
+        [registration_id, student_id]
       );
       if (registrations.length === 0) {
         return res.status(404).json({ message: 'Không tìm thấy đăng ký hoạt động để hủy' });
       }
 
+      const registration = registrations[0]; // Get the found registration details
+      const exam_id = registration.exam_id; // Extract exam_id from the found registration
+
       await pool.execute(
-        'UPDATE exam_registrations SET status = ? WHERE student_id = ? AND exam_id = ?',
-        ['cancelled', student_id, exam_id]
+        'UPDATE exam_registrations SET status = ? WHERE id = ?',
+        ['cancelled', registration_id]
       );
 
       // Recalculate count after cancellation
@@ -119,8 +124,7 @@ const registrationController = {
       );
       const updatedRegistrationCount = countResult[0].registration_count;
 
-      const [exam] = await pool.execute('SELECT name FROM exams WHERE id = ?', [exam_id]);
-      const notificationContent = `Đã hủy đăng ký kỳ thi "${exam[0].name}" thành công.`;
+      const notificationContent = `Đã hủy đăng ký kỳ thi "${registration.exam_name}" thành công.`;
       await pool.execute(
         'INSERT INTO notifications (id, user_id, type, content, exam_id) VALUES (?, ?, ?, ?, ?)',
         [uuidv4(), student_id, 'registration', notificationContent, exam_id]
@@ -158,12 +162,17 @@ const registrationController = {
     try {
       const student_id = req.user.id;
 
+      // Fetch all registrations for the student, regardless of status,
+      // and include rejection_reason for 'rejected' ones.
       const [registrations] = await pool.execute(`
-        SELECT r.*, e.name AS exam_name, e.subject_code, e.subject_name, s.room, s.start_time, s.end_time
+        SELECT
+          r.id, r.exam_id, r.student_id, r.status, r.registered_at, r.rejection_reason,
+          e.name AS exam_name, e.subject_code, e.subject_name,
+          s.room, s.start_time, s.end_time
         FROM exam_registrations r
         LEFT JOIN exams e ON r.exam_id = e.id
         LEFT JOIN schedules s ON e.id = s.exam_id -- Assuming schedules are linked to exams
-        WHERE r.student_id = ? AND r.status IN ('pending', 'approved')
+        WHERE r.student_id = ?
         ORDER BY r.registered_at DESC
       `, [student_id]);
 
@@ -253,6 +262,7 @@ const registrationController = {
   async rejectRegistration(req, res) {
     try {
       const { registration_id } = req.params;
+      const { rejection_reason } = req.body; // Expect rejection reason from request body
       const { role, id: userId } = req.user;
 
       const [registrations] = await pool.execute(
@@ -276,8 +286,8 @@ const registrationController = {
       }
 
       await pool.execute(
-        'UPDATE exam_registrations SET status = ? WHERE id = ?',
-        ['rejected', registration_id]
+        'UPDATE exam_registrations SET status = ?, rejection_reason = ? WHERE id = ?',
+        ['rejected', rejection_reason || null, registration_id] // Store rejection reason
       );
 
       // Recalculate count after rejection
@@ -287,7 +297,7 @@ const registrationController = {
       );
       const updatedRegistrationCount = countResult[0].registration_count;
 
-      const notificationContent = `Đăng ký kỳ thi "${registration.exam_name}" của bạn đã bị từ chối.`;
+      const notificationContent = `Đăng ký kỳ thi "${registration.exam_name}" của bạn đã bị từ chối.${rejection_reason ? ` Lý do: ${rejection_reason}` : ''}`;
       await pool.execute(
         'INSERT INTO notifications (id, user_id, type, content, exam_id) VALUES (?, ?, ?, ?, ?)',
         [uuidv4(), registration.student_id, 'registration', notificationContent, registration.exam_id]

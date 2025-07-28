@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS exam_registrations (
     student_id VARCHAR(36) NOT NULL,
     registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status ENUM('pending', 'approved', 'rejected', 'cancelled') DEFAULT 'pending',
+    rejection_reason VARCHAR(255) NULL, -- ADD THIS LINE
     -- Bổ sung cột updated_at để theo dõi thời điểm thay đổi trạng thái
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,

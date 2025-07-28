@@ -55,7 +55,7 @@ const PublicRoute = ({ children }) => {
 };
 
 const AppRoutes = () => {
-  const { user } = useAuth();
+  // You can use `user` here for role-based routing if needed, though ProtectedRoute handles basic auth
   return (
     <Routes>
       {/* Public routes */}
@@ -149,8 +149,6 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-
-      {/* Catch all route */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

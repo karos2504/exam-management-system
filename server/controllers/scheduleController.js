@@ -23,11 +23,11 @@ async function createSchedule(req, res) {
 
     const [conflictingSchedules] = await pool.execute(
       `SELECT * FROM schedules WHERE room = ?
-       AND (
-         (start_time <= ? AND end_time > ?) OR
-         (start_time < ? AND end_time >= ?) OR
-         (start_time >= ? AND end_time <= ?)
-       )`,
+        AND (
+          (start_time <= ? AND end_time > ?) OR
+          (start_time < ? AND end_time >= ?) OR
+          (start_time >= ? AND end_time <= ?)
+        )`,
       [room, start_time, start_time, end_time, end_time, start_time, end_time]
     );
 
@@ -45,8 +45,8 @@ async function createSchedule(req, res) {
 
     const [schedule] = await pool.execute(
       `SELECT s.*, e.name AS exam_name, e.subject_name
-       FROM schedules s JOIN exams e ON s.exam_id = e.id
-       WHERE s.id = ?`,
+        FROM schedules s JOIN exams e ON s.exam_id = e.id
+        WHERE s.id = ?`,
       [id]
     );
 
@@ -63,7 +63,7 @@ async function getAllSchedules(req, res) {
   try {
     const [schedules] = await pool.execute(
       `SELECT s.*, e.name AS exam_name, e.subject_name
-       FROM schedules s JOIN exams e ON s.exam_id = e.id`
+        FROM schedules s JOIN exams e ON s.exam_id = e.id`
     );
     res.json({ schedules });
   } catch (err) {
@@ -77,8 +77,8 @@ async function getSchedulesByExam(req, res) {
     const { exam_id } = req.params;
     const [schedules] = await pool.execute(
       `SELECT s.*, e.name AS exam_name, e.subject_name
-       FROM schedules s JOIN exams e ON s.exam_id = e.id
-       WHERE s.exam_id = ?`,
+        FROM schedules s JOIN exams e ON s.exam_id = e.id
+        WHERE s.exam_id = ?`,
       [exam_id]
     );
     res.json({ schedules });
@@ -114,11 +114,11 @@ async function updateSchedule(req, res) {
 
     const [conflicts] = await pool.execute(
       `SELECT * FROM schedules WHERE room = ? AND id != ?
-       AND (
-         (start_time <= ? AND end_time > ?) OR
-         (start_time < ? AND end_time >= ?) OR
-         (start_time >= ? AND end_time <= ?)
-       )`,
+        AND (
+          (start_time <= ? AND end_time > ?) OR
+          (start_time < ? AND end_time >= ?) OR
+          (start_time >= ? AND end_time <= ?)
+        )`,
       [room, id, start_time, start_time, end_time, end_time, start_time, end_time]
     );
 
@@ -133,8 +133,8 @@ async function updateSchedule(req, res) {
 
     const [updated] = await pool.execute(
       `SELECT s.*, e.name AS exam_name, e.subject_name
-       FROM schedules s JOIN exams e ON s.exam_id = e.id
-       WHERE s.id = ?`,
+        FROM schedules s JOIN exams e ON s.exam_id = e.id
+        WHERE s.id = ?`,
       [id]
     );
 

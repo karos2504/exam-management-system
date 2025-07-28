@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -14,80 +14,152 @@ const AdminAssignments = () => {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ exam_id: '', teacher_id: '', notes: '' });
   const [exams, setExams] = useState([]);
-  const [teachers, setTeachers] = useState([]);
+  const [availableTeachers, setAvailableTeachers] = useState([]);
 
-  const fetchAssignments = async () => {
+  // Hàm fetchAssignments được bao bọc bởi useCallback để tránh tạo lại hàm không cần thiết
+  const fetchAssignments = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/assignments');
+      // Đã sửa: Thay đổi endpoint từ '/assignments' thành '/exam-assignments'
+      const res = await api.get('/exam-assignments');
       setAssignments(res.data.assignments || []);
     } catch (err) {
       toast.error('Lỗi tải danh sách phân công');
+      console.error('Lỗi tải danh sách phân công:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchExams = async () => {
+  const fetchExams = useCallback(async () => {
     try {
       const res = await api.get('/exams');
       setExams(res.data.exams || []);
     } catch (err) {
       toast.error('Lỗi tải danh sách kỳ thi');
+      console.error('Lỗi tải danh sách kỳ thi:', err);
     }
-  };
+  }, []);
 
-  const fetchTeachers = async (exam_id) => {
+  // Hàm fetchAvailableTeachers để lấy giáo viên CHƯA được phân công
+  const fetchAvailableTeachers = useCallback(async (examId) => {
+    if (!examId) {
+      setAvailableTeachers([]);
+      return;
+    }
     try {
-      const res = await api.get('/assignments/available/teachers', { params: { exam_id } });
-      setTeachers(res.data.teachers || []);
+      // Đã sửa: Thay đổi endpoint từ '/assignments/available/teachers' thành '/exam-assignments/available/teachers'
+      const res = await api.get('/exam-assignments/available/teachers', { params: { exam_id: examId } });
+      setAvailableTeachers(res.data.teachers || []);
     } catch (err) {
-      toast.error('Lỗi tải danh sách giáo viên');
+      toast.error('Lỗi tải danh sách giáo viên khả dụng');
+      console.error('Lỗi tải danh sách giáo viên khả dụng:', err);
+      setAvailableTeachers([]);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchAssignments(); fetchExams(); }, []);
+  useEffect(() => {
+    fetchAssignments();
+    fetchExams();
+  }, [fetchAssignments, fetchExams]);
 
+  // Xử lý khi mở modal
   const openModal = (assignment = null) => {
     setEditing(assignment);
     setForm(assignment ? { ...assignment } : { exam_id: '', teacher_id: '', notes: '' });
     setShowModal(true);
-    if (!assignment) setTeachers([]);
-    if (assignment && assignment.exam_id) fetchTeachers(assignment.exam_id);
+
+    if (assignment) {
+      fetchAvailableTeachers(assignment.exam_id);
+    } else {
+      setAvailableTeachers([]);
+    }
   };
 
-  const closeModal = () => { setShowModal(false); setEditing(null); };
+  const closeModal = () => {
+    setShowModal(false);
+    setEditing(null);
+    setForm({ exam_id: '', teacher_id: '', notes: '' }); // Reset form khi đóng
+    setAvailableTeachers([]); // Reset teachers khi đóng modal
+  };
 
   const handleChange = e => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-    if (e.target.name === 'exam_id') fetchTeachers(e.target.value);
+    const { name, value } = e.target;
+    setForm(prevForm => ({ ...prevForm, [name]: value }));
+
+    if (name === 'exam_id') {
+      fetchAvailableTeachers(value); // Fetch available teachers khi thay đổi exam_id
+      // Reset teacher_id nếu exam_id thay đổi và không ở chế độ chỉnh sửa
+      if (!editing) {
+        setForm(prevForm => ({ ...prevForm, teacher_id: '' }));
+      }
+    }
   };
 
   const handleSubmit = async e => {
     e.preventDefault();
     try {
       if (editing) {
-        await api.put(`/assignments/${editing.id}`, form);
+        // Đã sửa: Thay đổi endpoint từ '/assignments/:id' thành '/exam-assignments/:id'
+        await api.put(`/exam-assignments/${editing.id}`, form);
         toast.success('Cập nhật phân công thành công');
       } else {
-        await api.post('/assignments', form);
+        // Đã sửa: Thay đổi endpoint từ '/assignments' thành '/exam-assignments'
+        await api.post('/exam-assignments', form);
         toast.success('Thêm phân công thành công');
       }
-      fetchAssignments();
+      fetchAssignments(); // Refresh danh sách sau khi thêm/sửa
       closeModal();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Lỗi lưu phân công');
+      console.error('Lỗi lưu phân công:', err);
     }
   };
 
   const handleDelete = async id => {
-    if (!window.confirm('Xác nhận xóa phân công?')) return;
+    if (!window.confirm('Bạn có chắc chắn muốn xóa phân công này không?')) return;
     try {
-      await api.delete(`/assignments/${id}`);
+      // Đã sửa: Thay đổi endpoint từ '/assignments/:id' thành '/exam-assignments/:id'
+      await api.delete(`/exam-assignments/${id}`);
       toast.success('Xóa phân công thành công');
-      fetchAssignments();
+      fetchAssignments(); // Refresh danh sách sau khi xóa
     } catch (err) {
-      toast.error('Lỗi xóa phân công');
+      toast.error(err.response?.data?.message || 'Lỗi xóa phân công');
+      console.error('Lỗi xóa phân công:', err);
+    }
+  };
+
+  // Hàm để chuyển đổi trạng thái hiển thị của Badge
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'assigned':
+        return <Badge type="info" text="Đã phân công" />;
+      case 'accepted':
+        return <Badge type="success" text="Đã chấp nhận" />;
+      case 'declined':
+        return <Badge type="danger" text="Đã từ chối" />;
+      default:
+        return <Badge type="secondary" text="Không xác định" />;
+    }
+  };
+
+  // Hàm định dạng ngày giờ
+  const formatDateTime = (isoString) => {
+    if (!isoString) return '';
+    try {
+      const date = new Date(isoString);
+      return new Intl.DateTimeFormat('vi-VN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).format(date);
+    } catch (e) {
+      console.error("Lỗi định dạng ngày giờ:", e);
+      return isoString.slice(0, 19).replace('T', ' ');
     }
   };
 
@@ -106,9 +178,7 @@ const AdminAssignments = () => {
 
       {/* Table */}
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-        </div>
+        <Loading />
       ) : assignments.length > 0 ? (
         <div className="card">
           <div className="card-body">
@@ -131,12 +201,12 @@ const AdminAssignments = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{a.exam_name} ({a.subject_code})</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{a.teacher_name}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{a.assigned_by_name}</td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{a.notes}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{a.notes || '-'}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={a.status === 'active' ? 'success' : 'warning'}>{a.status}</Badge>
+                        {getStatusBadge(a.status)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {a.assigned_at && a.assigned_at.slice(0, 19).replace('T', ' ')}
+                        {formatDateTime(a.assigned_at)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
@@ -171,8 +241,9 @@ const AdminAssignments = () => {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Kỳ thi</label>
+            <label htmlFor="exam_id" className="block text-sm font-medium text-gray-700">Kỳ thi</label>
             <select
+              id="exam_id"
               className="input-field mt-1"
               name="exam_id"
               value={form.exam_id}
@@ -187,8 +258,9 @@ const AdminAssignments = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Giáo viên</label>
+            <label htmlFor="teacher_id" className="block text-sm font-medium text-gray-700">Giáo viên</label>
             <select
+              id="teacher_id"
               className="input-field mt-1"
               name="teacher_id"
               value={form.teacher_id}
@@ -196,19 +268,30 @@ const AdminAssignments = () => {
               required
             >
               <option value="">-- Chọn giáo viên --</option>
-              {teachers.map(t => (
+              {/* Khi chỉnh sửa, đảm bảo giáo viên hiện tại vẫn hiển thị */}
+              {editing && !availableTeachers.find(t => t.id === form.teacher_id) && form.teacher_id && (
+                <option key={form.teacher_id} value={form.teacher_id}>
+                  {editing.teacher_name} (Hiện tại)
+                </option>
+              )}
+              {availableTeachers.map(t => (
                 <option key={t.id} value={t.id}>{t.full_name}</option>
               ))}
             </select>
+            {form.exam_id && availableTeachers.length === 0 && !editing && (
+              <p className="mt-2 text-sm text-gray-500">Không có giáo viên khả dụng cho kỳ thi này. Có thể tất cả đã được phân công hoặc không có giáo viên nào.</p>
+            )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Ghi chú</label>
-            <input
+            <label htmlFor="notes" className="block text-sm font-medium text-gray-700">Ghi chú</label>
+            <textarea
+              id="notes"
               className="input-field mt-1"
               name="notes"
               placeholder="Ghi chú"
               value={form.notes}
               onChange={handleChange}
+              rows="3"
             />
           </div>
           <div className="flex justify-end space-x-3">
