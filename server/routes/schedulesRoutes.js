@@ -40,8 +40,11 @@ const scheduleValidation = [
 // Routes - All routes require authentication
 router.use(auth);
 
-// Get all schedules (all roles)
+// Get all schedules (all roles, primarily for admins)
 router.get('/', scheduleController.getAllSchedules);
+
+// Get role-specific schedules (teachers: accepted assignments, students: approved registrations)
+router.get('/my-schedules', scheduleController.getMySchedules);
 
 // Get schedules by exam (all roles)
 router.get('/exam/:exam_id', scheduleController.getSchedulesByExam);

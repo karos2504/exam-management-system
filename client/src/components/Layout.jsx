@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, BookOpen, Calendar, Users, Settings, LogOut, Menu, X, User, Bell, Briefcase } from 'lucide-react';
-import socket from '../services/socket';
+import { Home, BookOpen, Calendar, Users, LogOut, Menu, X, User, Bell, Briefcase } from 'lucide-react';
+import socketService from '../services/socketService';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 
@@ -13,6 +13,21 @@ const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
 
+  // Fetch notification count
+  const fetchNotificationCount = async () => {
+    if (user && ['teacher', 'student'].includes(user.role) && user.id) {
+      try {
+        console.log('[Layout] Fetching notification count for user:', user.id);
+        const response = await api.get('/notifications/unread-count');
+        console.log('[Layout] Notification count fetched:', response.data.count);
+        setNotificationCount(response.data.count || 0);
+      } catch (err) {
+        console.error('[Layout] Error fetching notification count:', err);
+        // Avoid showing toast to prevent excessive notifications
+      }
+    }
+  };
+
   // Effect to close sidebar on route change (for mobile)
   useEffect(() => {
     setSidebarOpen(false); // Close sidebar whenever the route changes
@@ -20,21 +35,12 @@ const Layout = ({ children }) => {
 
   useEffect(() => {
     if (user && ['teacher', 'student'].includes(user.role) && user.id) {
-      const fetchNotificationCount = async () => {
-        try {
-          const response = await api.get('/notifications/unread-count');
-          setNotificationCount(response.data.count || 0);
-        } catch (err) {
-          console.error('Error fetching notification count:', err);
-          // toast.error('Không thể tải số lượng thông báo'); // Removed to avoid excessive toasts
-        }
-      };
-
       fetchNotificationCount();
 
-      socket.onNotificationReceived((notification) => {
-        // Check if the notification is for all users (user_ids is empty) or for this specific user
-        if (!notification.user_ids || notification.user_ids.length === 0 || notification.user_ids.includes(user.id)) {
+      // Set up socket listeners using socketService
+      socketService.onNotificationReceived((notification) => {
+        if (!notification.user_id || notification.user_id === user.id) {
+          console.log('[Layout] Received new notification:', notification);
           setNotificationCount((prev) => prev + 1);
           toast.success(notification.content, {
             icon: '🔔',
@@ -43,16 +49,20 @@ const Layout = ({ children }) => {
         }
       });
 
-      // Clean up socket listener on component unmount or user change
+      socketService.onNotificationRead((data) => {
+        console.log('[Layout] Notification marked as read via socket:', data);
+        if (data.user_id === user.id || !data.user_id) {
+          fetchNotificationCount(); // Re-fetch count when a notification is marked as read
+        }
+      });
+
+      // Clean up socket listeners
       return () => {
-        // It's generally better to remove specific listeners if possible,
-        // but for a clean slate on unmount, removeAllListeners can be used carefully.
-        // If other components use socket.on, this might affect them.
-        // A more robust approach might be to store listener functions and remove them by reference.
-        socket.removeAllListeners();
+        socketService.off('notification-created', socketService.onNotificationReceived);
+        socketService.off('notification-read', socketService.onNotificationRead);
       };
     }
-  }, [user]); // Re-run if user object changes
+  }, [user]);
 
   const handleLogout = () => {
     logout();
@@ -63,13 +73,16 @@ const Layout = ({ children }) => {
     { name: 'Dashboard', href: '/', icon: Home },
     { name: 'Kỳ thi', href: '/exams', icon: BookOpen },
     { name: 'Lịch thi', href: '/schedules', icon: Calendar },
-    // Conditional rendering for 'Đăng ký của tôi' vs 'Quản lý đăng ký'
     ...(user?.role === 'student'
       ? [{ name: 'Đăng ký của tôi', href: '/my-registrations', icon: Users }]
-      : user?.role === 'teacher' || user?.role === 'admin'
-        ? [{ name: 'Quản lý đăng ký', href: '/registrations', icon: Users }]
-        : []),
-    // Show 'Thông báo' link only if not admin, as admin has a separate 'Quản lý thông báo'
+      : user?.role === 'teacher'
+        ? [
+          { name: 'Quản lý đăng ký', href: '/registrations', icon: Users },
+          { name: 'Phân công của tôi', href: '/my-assignments', icon: Briefcase }, // Added for teachers
+        ]
+        : user?.role === 'admin'
+          ? [{ name: 'Quản lý đăng ký', href: '/registrations', icon: Users }]
+          : []),
     ...(user?.role !== 'admin' ? [{ name: 'Thông báo', href: '/notifications', icon: Bell }] : []),
   ];
 
@@ -86,27 +99,24 @@ const Layout = ({ children }) => {
         aria-hidden={!sidebarOpen}
       >
         {sidebarOpen && <div className="fixed inset-0 bg-gray-900 bg-opacity-75" onClick={() => setSidebarOpen(false)} />}
-
         <div
           className={`fixed inset-y-0 left-0 w-64 flex flex-col bg-white transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             }`}
         >
           <div className="flex h-16 items-center justify-between px-4 bg-gradient-to-r from-blue-500 to-blue-600">
-            {/* START FIX: Made title clickable for mobile sidebar */}
             <Link
               to="/"
               className="text-xl font-bold text-white"
               onClick={(e) => {
-                setSidebarOpen(false); // Close sidebar
+                setSidebarOpen(false);
                 if (location.pathname === '/') {
-                  e.preventDefault(); // Prevent default Link navigation if already on dashboard
-                  window.location.reload(); // Force full page reload
+                  e.preventDefault();
+                  window.location.reload();
                 }
               }}
             >
               Exam Management
             </Link>
-            {/* END FIX */}
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
@@ -171,20 +181,18 @@ const Layout = ({ children }) => {
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <div className="flex flex-col flex-grow bg-white shadow-lg">
           <div className="flex h-16 items-center px-4 bg-gradient-to-r from-blue-500 to-blue-600">
-            {/* START FIX: Made title clickable for desktop sidebar */}
             <Link
               to="/"
               className="text-xl font-bold text-white"
               onClick={(e) => {
                 if (location.pathname === '/') {
-                  e.preventDefault(); // Prevent default Link navigation if already on dashboard
-                  window.location.reload(); // Force full page reload
+                  e.preventDefault();
+                  window.location.reload();
                 }
               }}
             >
               Exam Management
             </Link>
-            {/* END FIX */}
           </div>
           <nav className="flex-1 space-y-1 px-2 py-4">
             {navigation.map((item) => {
@@ -236,7 +244,6 @@ const Layout = ({ children }) => {
       {/* Main content area */}
       <div className="lg:pl-64">
         <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
-          {/* Hamburger menu button for mobile */}
           <button
             type="button"
             className="-m-2.5 p-2.5 text-gray-700 lg:hidden hover:text-blue-600 transition-colors duration-200"
@@ -247,7 +254,7 @@ const Layout = ({ children }) => {
           </button>
 
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-            <div className="flex flex-1" /> {/* Spacer */}
+            <div className="flex flex-1" />
             <div className="flex items-center gap-x-4 lg:gap-x-6">
               {user && ['teacher', 'student'].includes(user.role) && (
                 <button
@@ -285,41 +292,40 @@ const Layout = ({ children }) => {
         </main>
       </div>
 
-      {/* Inline styles can be moved to a CSS file for better organization */}
       <style>
         {`
-                    :root {
-                        --primary-blue: #00A3E0;
-                        --hover-blue: #0086B3;
-                        --active-blue: #E6F3FA;
-                        --bg-light: #F8FAFC;
-                        --text-dark: #1F2A44;
-                    }
+          :root {
+            --primary-blue: #00A3E0;
+            --hover-blue: #0086B3;
+            --active-blue: #E6F3FA;
+            --bg-light: #F8FAFC;
+            --text-dark: #1F2A44;
+          }
 
-                    body {
-                        font-family: 'Inter', sans-serif;
-                    }
+          body {
+            font-family: 'Inter', sans-serif;
+          }
 
-                    .bg-blue-100 {
-                        background-color: var(--active-blue);
-                    }
+          .bg-blue-100 {
+            background-color: var(--active-blue);
+          }
 
-                    .text-blue-900 {
-                        color: var(--hover-blue);
-                    }
+          .text-blue-900 {
+            color: var(--hover-blue);
+          }
 
-                    .hover\\:bg-blue-50:hover {
-                        background-color: #F1F9FD;
-                    }
+          .hover\\:bg-blue-50:hover {
+            background-color: #F1F9FD;
+          }
 
-                    .hover\\:text-blue-900:hover {
-                        color: var(--hover-blue);
-                    }
+          .hover\\:text-blue-900:hover {
+            color: var(--hover-blue);
+          }
 
-                    .bg-red-600 {
-                        background-color: #DC2626;
-                    }
-                `}
+          .bg-red-600 {
+            background-color: #DC2626;
+          }
+        `}
       </style>
     </div>
   );

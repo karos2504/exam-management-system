@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, User, Shield } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const RegisterForm = () => {
   const { register: registerUser } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const {
@@ -21,7 +22,18 @@ const RegisterForm = () => {
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
-      const result = await registerUser(data);
+      // Only send the necessary fields: full_name, username, email, password, role
+      const payload = {
+        full_name: data.full_name,
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        role: 'student', // Defaulting role to 'student'
+      };
+      // 'confirmPassword' is for frontend validation only, don't send to backend
+      // No need to delete it explicitly if not included in 'payload' from the start.
+
+      const result = await registerUser(payload);
       if (result.success) {
         toast.success('Đăng ký thành công! Vui lòng đăng nhập.');
         navigate('/login');
@@ -57,7 +69,7 @@ const RegisterForm = () => {
                   <User className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  {...register('name', {
+                  {...register('full_name', {
                     required: 'Họ và tên là bắt buộc',
                     minLength: {
                       value: 2,
@@ -65,12 +77,40 @@ const RegisterForm = () => {
                     },
                   })}
                   type="text"
+                  autoComplete="name"
                   className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
                   placeholder="Nhập họ và tên"
                 />
               </div>
-              {errors.name && (
-                <p className="mt-1 text-red-500 text-sm">{errors.name.message}</p>
+              {errors.full_name && (
+                <p className="mt-1 text-red-500 text-sm">{errors.full_name.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Tên đăng nhập
+              </label>
+              <div className="mt-1 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  {...register('username', {
+                    required: 'Tên đăng nhập là bắt buộc',
+                    minLength: {
+                      value: 3,
+                      message: 'Tên đăng nhập phải có ít nhất 3 ký tự',
+                    },
+                  })}
+                  type="text"
+                  autoComplete="username"
+                  className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                  placeholder="Nhập tên đăng nhập"
+                />
+              </div>
+              {errors.username && (
+                <p className="mt-1 text-red-500 text-sm">{errors.username.message}</p>
               )}
             </div>
 
@@ -91,6 +131,7 @@ const RegisterForm = () => {
                     },
                   })}
                   type="email"
+                  autoComplete="email"
                   className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
                   placeholder="Nhập email"
                 />
@@ -117,6 +158,7 @@ const RegisterForm = () => {
                     },
                   })}
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   className="appearance-none relative block w-full px-3 py-2 pl-10 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
                   placeholder="Nhập mật khẩu"
                 />
@@ -139,26 +181,39 @@ const RegisterForm = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Vai trò
+                Xác nhận mật khẩu
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Shield className="h-5 w-5 text-gray-400" />
+                  <Lock className="h-5 w-5 text-gray-400" />
                 </div>
-                <select
-                  {...register('role', {
-                    required: 'Vai trò là bắt buộc',
+                <input
+                  {...register('confirmPassword', {
+                    required: 'Vui lòng xác nhận mật khẩu',
+                    validate: (value) =>
+                      value === watch('password') || 'Mật khẩu không khớp',
                   })}
-                  className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  className="appearance-none relative block w-full px-3 py-2 pl-10 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                  placeholder="Nhập lại mật khẩu"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
-                  <option value="">Chọn vai trò</option>
-                  <option value="student">Học sinh</option>
-                  <option value="teacher">Giáo viên</option>
-                  <option value="admin">Quản trị viên</option>
-                </select>
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-5 w-5 text-gray-400" />
+                  ) : (
+                    <Eye className="h-5 w-5 text-gray-400" />
+                  )}
+                </button>
               </div>
-              {errors.role && (
-                <p className="mt-1 text-red-500 text-sm">{errors.role.message}</p>
+              {errors.confirmPassword && (
+                <p className="mt-1 text-red-500 text-sm">
+                  {errors.confirmPassword.message}
+                </p>
               )}
             </div>
           </div>
@@ -187,4 +242,4 @@ const RegisterForm = () => {
   );
 };
 
-export default RegisterForm; 
+export default RegisterForm;

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import api from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
+import api from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { FileText } from 'lucide-react';
-import Button from '../components/UI/Button';
-import Badge from '../components/UI/Badge';
-import socket from '../services/socket';
+import Button from '../../components/UI/Button';
+import Badge from '../../components/UI/Badge';
+import socket from '../../services/socketService';
 
 const StudentExams = () => {
     const { user } = useAuth();

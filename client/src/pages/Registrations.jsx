@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 import { CheckCircle, XCircle, Users } from 'lucide-react';
-import toast from 'react-hot-toast'; // Keep this import for react-hot-toast
+import toast from 'react-hot-toast';
 import Button from '../components/UI/Button';
 import Modal from '../components/UI/Modal';
 import Loading from '../components/UI/Loading';
@@ -14,7 +14,6 @@ const Registrations = () => {
   const [selectedExam, setSelectedExam] = useState('');
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [currentRegistrationToReject, setCurrentRegistrationToReject] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -26,20 +25,27 @@ const Registrations = () => {
   useEffect(() => {
     if (selectedExam) {
       fetchRegistrations(selectedExam);
+    } else {
+      setRegistrations([]);
+      setLoading(false);
     }
   }, [selectedExam]);
 
   const fetchExams = async () => {
     try {
+      setLoading(true);
       const response = await api.get('/exams');
-      setExams(response.data.exams);
-      if (response.data.exams.length > 0) {
-        setSelectedExam(response.data.exams[0].id);
+      const fetchedExams = response.data.exams;
+      setExams(fetchedExams);
+      if (fetchedExams.length > 0) {
+        setSelectedExam(fetchedExams[0].id);
       } else {
-        setLoading(false);
+        setSelectedExam('');
+        toast.error('Bạn không được phân công hoặc tạo kỳ thi nào.');
       }
     } catch (error) {
-      toast.error('Lỗi khi tải danh sách kỳ thi.'); // Using react-hot-toast
+      toast.error('Lỗi khi tải danh sách kỳ thi: ' + (error.response?.data?.message || error.message));
+    } finally {
       setLoading(false);
     }
   };
@@ -50,7 +56,10 @@ const Registrations = () => {
       const response = await api.get(`/registrations/exam/${examId}`);
       setRegistrations(response.data.registrations);
     } catch (error) {
-      toast.error('Lỗi khi tải danh sách đăng ký.'); // Using react-hot-toast
+      const message = error.response?.status === 403
+        ? 'Bạn không có quyền xem đăng ký của kỳ thi này.'
+        : 'Lỗi khi tải danh sách đăng ký: ' + (error.response?.data?.message || error.message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -58,14 +67,18 @@ const Registrations = () => {
 
   const handleUpdateRegistrationStatus = async (registrationId, newStatus, reason = null) => {
     try {
-      await api.put(`/registrations/confirm/${registrationId}`, { status: newStatus, rejection_reason: reason });
-      toast.success(`Cập nhật trạng thái thành công: ${newStatus === 'approved' ? 'Đã xác nhận' : newStatus === 'rejected' ? 'Đã từ chối' : 'Đã hủy'}`); // Using react-hot-toast
+      const payload = newStatus === 'rejected' ? { rejection_reason: reason } : {};
+      await api.put(`/registrations/${newStatus === 'approved' ? 'confirm' : 'reject'}/${registrationId}`, payload);
+      toast.success(`Cập nhật trạng thái thành công: ${newStatus === 'approved' ? 'Đã xác nhận' : 'Đã từ chối'}`);
       fetchRegistrations(selectedExam);
       setShowRejectModal(false);
       setCurrentRegistrationToReject(null);
       setRejectionReason('');
     } catch (error) {
-      toast.error(`Lỗi khi cập nhật trạng thái: ${error.response?.data?.message || error.message}`); // Using react-hot-toast
+      const message = error.response?.status === 403
+        ? 'Bạn không có quyền cập nhật trạng thái đăng ký này.'
+        : `Lỗi khi cập nhật trạng thái: ${error.response?.data?.message || error.message}`;
+      toast.error(message);
     }
   };
 
@@ -83,30 +96,30 @@ const Registrations = () => {
 
   const getStatusBadge = (status) => {
     let badgeText = '';
-    let badgeType = 'default';
+    let variant = 'default';
 
     switch (status) {
       case 'pending':
         badgeText = 'Chờ xác nhận';
-        badgeType = 'warning';
+        variant = 'warning';
         break;
       case 'approved':
         badgeText = 'Đã xác nhận';
-        badgeType = 'success';
+        variant = 'success';
         break;
       case 'rejected':
         badgeText = 'Đã từ chối';
-        badgeType = 'error';
+        variant = 'destructive';
         break;
       case 'cancelled':
         badgeText = 'Đã hủy';
-        badgeType = 'default';
+        variant = 'default';
         break;
       default:
         badgeText = 'Không rõ';
-        badgeType = 'default';
+        variant = 'default';
     }
-    return <Badge text={badgeText} type={badgeType} />;
+    return <Badge variant={variant}>{badgeText}</Badge>;
   };
 
   const formatDateTime = (dateTime) => {
@@ -123,10 +136,6 @@ const Registrations = () => {
 
   return (
     <div className="space-y-6">
-      {/* Remove the problematic line here: */}
-      {/* <Toast /> */} {/* <-- DELETED THIS LINE */}
-
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Quản lý đăng ký</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -134,7 +143,6 @@ const Registrations = () => {
         </p>
       </div>
 
-      {/* Exam Selector */}
       <div className="card">
         <div className="card-header">
           <h3 className="text-lg leading-6 font-medium text-gray-900">
@@ -155,113 +163,115 @@ const Registrations = () => {
               ))}
             </select>
           ) : (
-            <p className="text-sm text-gray-500">Không có kỳ thi nào để hiển thị.</p>
+            <p className="text-sm text-gray-500">Bạn chưa được phân công hoặc tạo kỳ thi nào.</p>
           )}
         </div>
       </div>
 
-      {/* Registrations List */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">
-            Danh sách đăng ký {selectedExam ? `cho kỳ thi ${exams.find(e => e.id === selectedExam)?.name}` : ''}
-          </h3>
-        </div>
-        <div className="card-body">
-          {loading && selectedExam ? (
-            <Loading />
-          ) : registrations.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Học sinh
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Trạng thái
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Thời gian đăng ký
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Thao tác
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {registrations.map((registration) => (
-                    <tr key={registration.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {registration.student_name}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {registration.student_email}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(registration.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {formatDateTime(registration.registered_at)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          {registration.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => handleUpdateRegistrationStatus(registration.id, 'approved')}
-                                className="text-green-600 hover:text-green-900"
-                                title="Xác nhận đăng ký"
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => openRejectModal(registration)}
-                                className="text-red-600 hover:text-red-900"
-                                title="Từ chối đăng ký"
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
+      {selectedExam && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">
+              Danh sách đăng ký {exams.find(e => e.id === selectedExam)?.name || ''}
+            </h3>
+          </div>
+          <div className="card-body">
+            {loading ? (
+              <Loading />
+            ) : registrations.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Học sinh
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Trạng thái
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Thời gian đăng ký
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Thao tác
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <Users className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">
-                Chưa có đăng ký nào
-              </h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Chưa có học sinh nào đăng ký kỳ thi này.
-              </p>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {registrations.map((registration) => (
+                      <tr key={registration.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">
+                            {registration.student_name}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {registration.student_email}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {getStatusBadge(registration.status)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {formatDateTime(registration.registered_at)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            {registration.status === 'pending' && (
+                              <>
+                                <button
+                                  onClick={() => handleUpdateRegistrationStatus(registration.id, 'approved')}
+                                  className="text-green-600 hover:text-green-900"
+                                  title="Xác nhận đăng ký"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => openRejectModal(registration)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Từ chối đăng ký"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Users className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">
+                  Chưa có đăng ký nào
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Chưa có học sinh nào đăng ký kỳ thi này.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Reject Registration Modal */}
       {showRejectModal && (
         <Modal
           isOpen={showRejectModal}
           onClose={() => setShowRejectModal(false)}
           title="Từ chối đăng ký"
         >
-          <p className="mb-4">Bạn có chắc chắn muốn từ chối đăng ký của **{currentRegistrationToReject?.student_name}** cho kỳ thi **{exams.find(e => e.id === selectedExam)?.name}** không?</p>
+          <p className="mb-4">
+            Bạn có chắc chắn muốn từ chối đăng ký của <strong>{currentRegistrationToReject?.student_name}</strong> cho kỳ thi <strong>{exams.find(e => e.id === selectedExam)?.name}</strong> không?
+          </p>
           <div className="mb-4">
             <label htmlFor="rejectionReason" className="block text-sm font-medium text-gray-700 mb-1">Lý do từ chối (Tùy chọn):</label>
             <textarea

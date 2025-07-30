@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
-import socketService from '../services/socket';
-import toast from 'react-hot-toast'; // Assuming you use react-hot-toast for notifications
+import socketService from '../services/socketService';
+import toast from 'react-hot-toast';
 
 const AuthContext = createContext();
 
@@ -25,7 +25,9 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         try {
+          console.log('[AuthProvider] Fetching user profile with token:', token);
           const response = await api.get('/auth/profile');
+          console.log('[AuthProvider] Profile response:', response.data);
           const profileUser = response.data.user || response.data;
 
           if (isMounted) {
@@ -34,15 +36,21 @@ export const AuthProvider = ({ children }) => {
 
             if (['teacher', 'student', 'admin'].includes(profileUser.role)) {
               try {
-                // AWAIT the socket connection
-                await socketService.connect({ id: profileUser.id, role: profileUser.role });
-                // ONLY call joinRoom after connection is confirmed
-                socketService.joinRoom({ id: profileUser.id, role: profileUser.role });
+                await socketService.connect({
+                  id: profileUser.id,
+                  role: profileUser.role,
+                  username: profileUser.username,
+                  full_name: profileUser.full_name,
+                });
+                // Set up socket listeners after connection
+                socketService.onUserLogin((data) => {
+                  console.log('A user just logged in (from Socket.IO broadcast):', data);
+                  toast.info(`${data.username || `User ${data.userId}`} (${data.role}) just logged in!`);
+                });
+                console.log('[AuthProvider] Socket connected for user:', profileUser.id);
               } catch (socketError) {
                 console.error('❌ [AuthProvider] Socket connection failed:', socketError);
                 toast.error('Không thể kết nối đến máy chủ thông báo.');
-                // Decide if you want to log out or just warn here
-                // For now, it will just warn and continue with auth
               }
             } else {
               socketService.disconnect();
@@ -52,7 +60,7 @@ export const AuthProvider = ({ children }) => {
           console.error('❌ [AuthProvider] Failed to get profile, logging out:', error);
           if (isMounted) {
             logout();
-            toast.error('Phiên đăng nhập hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.');
+            toast.error('Phiên đăng nhập hết hạn hoặc không hợp lệ.');
           }
         }
       } else {
@@ -71,27 +79,54 @@ export const AuthProvider = ({ children }) => {
 
     return () => {
       isMounted = false;
-      // This ensures socket is disconnected if AuthProvider unmounts for any reason
-      // (e.g., app closure, but often not on route changes if it wraps the whole app).
-      // logout() also explicitly disconnects.
+      socketService.off('user-login');
       socketService.disconnect();
     };
   }, [token]);
 
   const login = async (credentials) => {
     try {
+      console.log('[AuthProvider] Starting login with credentials:', credentials);
       const response = await api.post('/auth/login', credentials);
-      const { token: newToken } = response.data; // userData will be fetched by useEffect
+      console.log('[AuthProvider] Login API response:', response.data);
+
+      if (response.status !== 200 || !response.data.token || !response.data.user) {
+        console.error('[AuthProvider] Invalid login response:', response.data);
+        throw new Error(response.data.message || 'Invalid login response from server');
+      }
+
+      const { token: newToken, user: userDataFromLogin } = response.data;
+      console.log('[AuthProvider] Setting token and user:', { newToken, userDataFromLogin });
 
       localStorage.setItem('token', newToken);
+      localStorage.setItem('user', JSON.stringify(userDataFromLogin));
       api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-      setToken(newToken); // This triggers the useEffect to fetch profile and connect socket
-      toast.success('Đăng nhập thành công!');
+      setToken(newToken);
+      setUser(userDataFromLogin);
 
+      if (['teacher', 'student', 'admin'].includes(userDataFromLogin.role)) {
+        try {
+          await socketService.connect({
+            id: userDataFromLogin.id,
+            role: userDataFromLogin.role,
+            username: userDataFromLogin.username,
+            full_name: userDataFromLogin.full_name,
+          });
+          console.log('[AuthProvider] Socket connected successfully for user:', userDataFromLogin.id);
+        } catch (socketError) {
+          console.error('❌ [AuthProvider] Socket connection failed after login:', socketError);
+          toast.error('Không thể kết nối đến máy chủ thông báo.');
+        }
+      }
+
+      console.log('[AuthProvider] Login successful, triggering success toast');
+      toast.success('Đăng nhập thành công!');
       return { success: true };
     } catch (error) {
-      console.error('Login failed:', error.response?.data?.message || error.message);
-      toast.error(error.response?.data?.message || 'Đăng nhập thất bại');
+      console.error('[AuthProvider] Login failed:', error.response?.data?.message || error.message);
+      toast.error(error.response?.data?.message || 'Đăng nhập thất bại', {
+        id: 'login-error',
+      });
       return {
         success: false,
         error: error.response?.data?.message || 'Đăng nhập thất bại',
@@ -106,7 +141,9 @@ export const AuthProvider = ({ children }) => {
       return { success: true, data: response.data };
     } catch (error) {
       console.error('Registration failed:', error.response?.data?.message || error.message);
-      toast.error(error.response?.data?.message || 'Đăng ký thất bại');
+      toast.error(error.response?.data?.message || 'Đăng ký thất bại', {
+        id: 'register-error',
+      });
       return {
         success: false,
         error: error.response?.data?.message || 'Đăng ký thất bại',
@@ -120,7 +157,7 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setUser(null);
     delete api.defaults.headers.common['Authorization'];
-    socketService.disconnect(); // Ensure immediate socket disconnect on explicit logout
+    socketService.disconnect();
     toast.success('Đăng xuất thành công!');
   };
 

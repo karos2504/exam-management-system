@@ -1,14 +1,12 @@
-// src/components/Schedules.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
-import socketService from '@/services/socket';
+import socketService from '@/services/socketService';
 import { Plus, BookOpen, Edit, Trash2, Calendar, Eye } from 'lucide-react';
-import toast from 'react-hot-toast'; // Đã có react-hot-toast
+import toast from 'react-hot-toast';
 import Button from '@/components/UI/Button';
 import Modal from '@/components/UI/Modal';
 import Loading from '@/components/UI/Loading';
-// import Toast from '@/components/UI/Toast'; // <--- XÓA DÒNG NÀY ĐI
 import Badge from '@/components/UI/Badge';
 
 const Schedules = () => {
@@ -30,29 +28,48 @@ const Schedules = () => {
   const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
-    if (!authLoading) {
+    if (!authLoading && user && user.id && user.role) {
       fetchData();
       socketService.onScheduleUpdate((updatedSchedule) => {
-        setSchedules((prev) =>
-          prev.map((sched) => (sched.id === updatedSchedule.id ? updatedSchedule : sched))
-        );
-        toast.success(`Lịch thi ${updatedSchedule.room} đã được cập nhật`);
+        // Only update if the schedule is relevant to the user
+        if (isScheduleRelevant(updatedSchedule)) {
+          setSchedules((prev) =>
+            prev.map((sched) => (sched.id === updatedSchedule.id ? updatedSchedule : sched))
+          );
+          toast.success(`Lịch thi ${updatedSchedule.room} đã được cập nhật`);
+        }
       });
     }
-    return () => socketService.removeAllListeners();
-  }, [authLoading]);
+    return () => socketService.off('schedule-updated', socketService.onScheduleUpdate);
+  }, [authLoading, user]);
+
+  // Determine if a schedule is relevant based on user role
+  const isScheduleRelevant = (schedule) => {
+    if (!user || !user.id || !user.role) return false;
+    if (user.role === 'admin') return true; // Admins see all schedules
+    if (user.role === 'teacher') {
+      // Teachers only see schedules for exams where they have accepted assignments
+      return schedules.some((s) => s.exam_id === schedule.exam_id && s.teacher_id === user.id && s.assignment_status === 'accepted');
+    }
+    if (user.role === 'student') {
+      // Students only see schedules for exams with approved registrations
+      return schedules.some((s) => s.exam_id === schedule.exam_id && s.student_id === user.id && s.registration_status === 'approved');
+    }
+    return false;
+  };
 
   const fetchData = async () => {
     try {
       setLoading(true);
       const [schedulesRes, examsRes] = await Promise.all([
-        api.get('/schedules'),
+        api.get('/schedules/my-schedules'), // New endpoint for role-specific schedules
         api.get('/exams'),
       ]);
+      console.log('[Schedules] Fetched schedules:', schedulesRes.data.schedules);
       setSchedules(schedulesRes.data.schedules || []);
       setExams(examsRes.data.exams || []);
     } catch (error) {
-      console.error('Error fetching data:', error.response?.data || error);
+      console.error('[Schedules] Error fetching data:', error.response?.data || error);
       toast.error(error.response?.data?.message || 'Lỗi khi tải dữ liệu');
     } finally {
       setLoading(false);
@@ -63,8 +80,7 @@ const Schedules = () => {
     try {
       const { room, start_time, end_time } = formData;
       const exclude_id = editingSchedule ? editingSchedule.id : undefined;
-      // Make sure your backend endpoint is correct here (e.g., /schedules/check-conflict)
-      const response = await api.get('/schedules/check-conflict', { // Removed /api/ from path
+      const response = await api.get('/schedules/check-conflict', {
         params: { room, start_time, end_time, exclude_id },
       });
       if (response.data.has_conflict) {
@@ -72,7 +88,7 @@ const Schedules = () => {
       }
       return [];
     } catch (error) {
-      console.error('Error checking schedule conflict:', error.response?.data || error);
+      console.error('[Schedules] Error checking schedule conflict:', error.response?.data || error);
       return [];
     }
   };
@@ -94,7 +110,7 @@ const Schedules = () => {
     if (conflicts.length > 0) {
       errors.conflict = `Phòng thi đã được sử dụng trong khoảng thời gian này: ${conflicts
         .map((c) => `${c.exam_name} (${formatDateTime(c.start_time)} - ${formatDateTime(c.end_time)})`)
-        .join(', ')}`; // Format conflict times for better readability
+        .join(', ')}`;
     }
 
     setFormErrors(errors);
@@ -111,13 +127,11 @@ const Schedules = () => {
       const payload = { ...formData };
       let response;
       if (editingSchedule) {
-        // Make sure your backend endpoint is correct here (e.g., /schedules/:id)
-        response = await api.put(`/schedules/${editingSchedule.id}`, payload); // Removed /api/ from path
+        response = await api.put(`/schedules/${editingSchedule.id}`, payload);
         socketService.emitScheduleUpdate(response.data.schedule);
         toast.success('Cập nhật lịch thi thành công');
       } else {
-        // Make sure your backend endpoint is correct here (e.g., /schedules)
-        response = await api.post('/schedules', payload); // Removed /api/ from path
+        response = await api.post('/schedules', payload);
         socketService.emitScheduleUpdate(response.data.schedule);
         toast.success('Tạo lịch thi thành công');
       }
@@ -127,7 +141,7 @@ const Schedules = () => {
       setFormErrors({});
       fetchData();
     } catch (error) {
-      console.error('Error saving schedule:', error.response?.data || error);
+      console.error('[Schedules] Error saving schedule:', error.response?.data || error);
       const errorMsg = error.response?.data?.message ||
         (error.response?.data?.errors
           ? error.response.data.errors.map((e) => e.msg).join(', ')
@@ -146,8 +160,8 @@ const Schedules = () => {
     setFormData({
       exam_id: schedule.exam_id,
       room: schedule.room,
-      start_time: schedule.start_time ? schedule.start_time.slice(0, 16) : '', // Ensure start_time exists before slicing
-      end_time: schedule.end_time ? schedule.end_time.slice(0, 16) : '', // Ensure end_time exists before slicing
+      start_time: schedule.start_time ? schedule.start_time.slice(0, 16) : '',
+      end_time: schedule.end_time ? schedule.end_time.slice(0, 16) : '',
     });
     setShowModal(true);
     setFormErrors({});
@@ -156,24 +170,18 @@ const Schedules = () => {
   const handleDelete = async (scheduleId) => {
     if (window.confirm('Bạn có chắc muốn xóa lịch thi này?')) {
       try {
-        // Make sure your backend endpoint is correct here (e.g., /schedules/:id)
-        await api.delete(`/schedules/${scheduleId}`); // Removed /api/ from path
+        await api.delete(`/schedules/${scheduleId}`);
         toast.success('Xóa lịch thi thành công');
         fetchData();
       } catch (error) {
-        console.error('Error deleting schedule:', error.response?.data || error);
+        console.error('[Schedules] Error deleting schedule:', error.response?.data || error);
         toast.error(error.response?.data?.message || 'Lỗi khi xóa lịch thi');
       }
     }
   };
 
-  // Removed handleView as it was replaced by handleViewSchedule with modal
-  // const handleView = (schedule) => {
-  //   toast.info(`Xem chi tiết lịch thi: ${schedule.exam_name} - ${schedule.room}`);
-  // };
-
   const formatDateTime = (dateTime) => {
-    if (!dateTime) return ''; // Handle null or undefined dateTime
+    if (!dateTime) return '';
     return new Date(dateTime).toLocaleString('vi-VN', {
       dateStyle: 'short',
       timeStyle: 'short',
@@ -189,7 +197,9 @@ const Schedules = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Quản lý lịch thi</h1>
-          <p className="mt-1 text-sm text-gray-500">Xếp lịch và quản lý thời gian thi</p>
+          <p className="mt-1 text-sm text-gray-500">
+            {user?.role === 'student' ? 'Lịch thi của các kỳ thi đã đăng ký' : 'Xếp lịch và quản lý thời gian thi'}
+          </p>
         </div>
         {(user?.role === 'teacher' || user?.role === 'admin') && (
           <Button variant="primary" onClick={() => setShowModal(true)}>
@@ -248,7 +258,11 @@ const Schedules = () => {
             <div className="text-center py-8">
               <Calendar className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có lịch thi</h3>
-              <p className="mt-1 text-sm text-gray-500">Bắt đầu tạo lịch thi đầu tiên.</p>
+              <p className="mt-1 text-sm text-gray-500">
+                {user?.role === 'student'
+                  ? 'Bạn chưa có kỳ thi được phê duyệt.'
+                  : 'Bắt đầu tạo lịch thi đầu tiên.'}
+              </p>
             </div>
           )}
         </div>
@@ -292,11 +306,13 @@ const Schedules = () => {
               className={`input-field mt-1 ${formErrors.exam_id ? 'border-red-500' : ''}`}
             >
               <option value="">Chọn kỳ thi</option>
-              {exams.map((exam) => (
-                <option key={exam.id} value={exam.id}>
-                  {exam.name} - {exam.subject_name}
-                </option>
-              ))}
+              {exams
+                .filter((exam) => user?.role !== 'teacher' || exam.teacher_id === user.id) // Teachers only see their assigned exams
+                .map((exam) => (
+                  <option key={exam.id} value={exam.id}>
+                    {exam.name} - {exam.subject_name}
+                  </option>
+                ))}
             </select>
             {formErrors.exam_id && <p className="text-red-500 text-sm mt-1">{formErrors.exam_id}</p>}
           </div>

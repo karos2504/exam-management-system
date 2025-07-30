@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import api from '../services/api';
+import api from '../../services/api';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Button from '../components/UI/Button';
-import Modal from '../components/UI/Modal';
-import Badge from '../components/UI/Badge';
+import Button from '../../components/UI/Button';
+import Modal from '../../components/UI/Modal';
+import Badge from '../../components/UI/Badge';
 import Select from 'react-select';
-import socket from '../services/socket'; // Import the socket service
-import { useAuth } from '../contexts/AuthContext';
+import socket from '../../services/socketService'; // Import the socket service
+import { useAuth } from '../../contexts/AuthContext';
 
 const AdminNotifications = () => {
   const { user } = useAuth(); // Get user from AuthContext

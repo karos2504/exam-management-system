@@ -104,8 +104,7 @@ CREATE TABLE IF NOT EXISTS exam_registrations (
     student_id VARCHAR(36) NOT NULL,
     registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status ENUM('pending', 'approved', 'rejected', 'cancelled') DEFAULT 'pending',
-    rejection_reason VARCHAR(255) NULL, -- ADD THIS LINE
-    -- Bổ sung cột updated_at để theo dõi thời điểm thay đổi trạng thái
+    rejection_reason VARCHAR(255) NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -176,16 +175,11 @@ CREATE TABLE IF NOT EXISTS notifications (
     INDEX idx_notifications_type (type)
 );
 
----
----
 -- =============================
--- DỮ LIỆU MẪU CHO HỆ THỐNG LMS (Với UUID hợp lệ đã được kiểm tra cẩn thận)
+-- DỮ LIỆU MẪU CHO HỆ THỐNG LMS
 -- =============================
----
 
--- UUIDs hợp lệ đã được tạo mới và kiểm tra độ dài chính xác
--- Đảm bảo chữ số đầu tiên của nhóm thứ 3 là '4' và nhóm thứ 4 là '8', '9', 'A', 'B'
-
+-- UUIDs hợp lệ
 SET @admin_uuid = 'e7a5b3d9-2c6f-4a8e-8b1d-0c2f3a4b5d6e';
 SET @teacher1_uuid = '1f9c8b7a-3e5d-4f0c-9a2b-3c4d5e6f7a8b';
 SET @teacher2_uuid = 'a0e9d8c7-6b5a-4f4d-8e3c-2b1a0d9e8f7c';
@@ -216,6 +210,7 @@ SET @exam8_uuid = '8f7e6d5c-4b3a-4901-8234-56789abcdef1';
 SET @assign1_uuid = 'c2b1a0d9-e8f7-4654-a321-0fedcba98767';
 SET @assign2_uuid = '7a6b5c4d-3e2f-4109-8765-4321fedcba34';
 SET @assign3_uuid = '2b1c0d9e-8f7a-4234-a5b6-c7d8e9f0a156';
+SET @assign4_uuid = '1a2b3c4d-5e6f-4789-a0b1-c2d3e4f5a678';
 
 SET @sched1_uuid = '6e5d4c3b-2a10-4876-b543-21fedcba9889';
 SET @sched2_uuid = '0f1e2d3c-4b5a-4678-9d0e-1f2a3b4c5d90';
@@ -237,7 +232,7 @@ SET @noti6_uuid = '8f7e6d5c-4b3a-4901-8234-56789abcdef3';
 SET @noti7_uuid = 'c2b1a0d9-e8f7-4654-a321-0fedcba98701';
 SET @noti8_uuid = '7a6b5c4d-3e2f-4109-8765-4321fedcba23';
 SET @noti9_uuid = '2b1c0d9e-8f7a-4234-a5b6-c7d8e9f0a145';
-
+SET @noti10_uuid = '4e5f6a7b-8c9d-4012-b3c4-d5e6f7a8b901';
 
 -- USERS
 INSERT INTO users (id, username, password_hash, email, full_name, phone, role, avatar_url)
@@ -283,7 +278,8 @@ INSERT INTO exam_assignments (id, exam_id, teacher_id, assigned_by, status, note
 VALUES
     (@assign1_uuid, @exam1_uuid, @teacher1_uuid, @admin_uuid, 'accepted', 'Phân công cho giáo viên Toán'),
     (@assign2_uuid, @exam2_uuid, @teacher2_uuid, @admin_uuid, 'accepted', 'Phân công cho giáo viên Văn'),
-    (@assign3_uuid, @exam3_uuid, @teacher1_uuid, @admin_uuid, 'assigned', 'Phân công cho giáo viên Toán (có thể dạy Vật lý)');
+    (@assign3_uuid, @exam3_uuid, @teacher1_uuid, @admin_uuid, 'accepted', 'Phân công cho giáo viên Toán (có thể dạy Vật lý)'),
+    (@assign4_uuid, @exam4_uuid, @teacher1_uuid, @admin_uuid, 'accepted', 'Phân công cho giáo viên Toán (có thể dạy Hóa học)');
 
 -- SCHEDULES
 INSERT INTO schedules (id, exam_id, room, start_time, end_time)
@@ -293,7 +289,6 @@ VALUES
     (@sched3_uuid, @exam3_uuid, 'C303', '2025-07-22 08:00:00', '2025-07-22 09:30:00');
 
 -- EXAM_REGISTRATIONS
--- Lưu ý: Cột updated_at sẽ tự động cập nhật khi trạng thái thay đổi
 INSERT INTO exam_registrations (id, exam_id, student_id, registered_at, status)
 VALUES
     (@reg1_uuid, @exam1_uuid, @student1_uuid, '2025-07-15 10:00:00', 'approved'),
@@ -314,4 +309,5 @@ VALUES
     (@noti6_uuid, @teacher2_uuid, 'assignment', 'Bạn được phân công phụ trách kỳ thi Văn.', 0, @exam2_uuid),
     (@noti7_uuid, @teacher1_uuid, 'assignment', 'Bạn được phân công phụ trách kỳ thi Vật lý.', 0, @exam3_uuid),
     (@noti8_uuid, NULL, 'system', 'Hệ thống bảo trì định kỳ vào 01:00 ngày 27/07/2025.', 0, NULL),
-    (@noti9_uuid, NULL, 'system', 'Cập nhật lịch thi mới cho HK2.', 0, NULL);
+    (@noti9_uuid, NULL, 'system', 'Cập nhật lịch thi mới cho HK2.', 0, NULL),
+    (@noti10_uuid, @teacher1_uuid, 'assignment', 'Bạn được phân công phụ trách kỳ thi Hóa học.', 0, @exam4_uuid);

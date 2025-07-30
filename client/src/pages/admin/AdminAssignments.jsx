@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import api from '../services/api';
+import api from '../../services/api';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Button from '../components/UI/Button';
-import Modal from '../components/UI/Modal';
-import Loading from '../components/UI/Loading';
-import Badge from '../components/UI/Badge';
+import Button from '../../components/UI/Button';
+import Modal from '../../components/UI/Modal';
+import Loading from '../../components/UI/Loading';
+import Badge from '../../components/UI/Badge';
 
 const AdminAssignments = () => {
   const [assignments, setAssignments] = useState([]);

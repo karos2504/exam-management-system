@@ -21,6 +21,17 @@ async function createSchedule(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy kỳ thi' });
     }
 
+    // For teachers, verify they are assigned to the exam and have accepted
+    if (req.user.role === 'teacher') {
+      const [assignments] = await pool.execute(
+        'SELECT id FROM exam_assignments WHERE exam_id = ? AND teacher_id = ? AND status = ?',
+        [exam_id, req.user.id, 'accepted']
+      );
+      if (assignments.length === 0) {
+        return res.status(403).json({ message: 'Bạn không được phân công hoặc chưa chấp nhận phân công cho kỳ thi này' });
+      }
+    }
+
     const [conflictingSchedules] = await pool.execute(
       `SELECT * FROM schedules WHERE room = ?
         AND (
@@ -51,6 +62,9 @@ async function createSchedule(req, res) {
     );
 
     req.io.to('admin-room').emit('schedule-updated', schedule[0]);
+    if (req.user.role === 'teacher') {
+      req.io.to(`user-${req.user.id}`).emit('schedule-updated', schedule[0]);
+    }
 
     res.status(201).json({ message: 'Tạo lịch thi thành công', schedule: schedule[0] });
   } catch (error) {
@@ -68,6 +82,49 @@ async function getAllSchedules(req, res) {
     res.json({ schedules });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+}
+
+async function getMySchedules(req, res) {
+  try {
+    const user_id = req.user.id;
+    const role = req.user.role;
+    let schedules = [];
+
+    if (role === 'admin') {
+      // Admins see all schedules
+      [schedules] = await pool.execute(
+        `SELECT s.*, e.name AS exam_name, e.subject_name
+         FROM schedules s JOIN exams e ON s.exam_id = e.id`
+      );
+    } else if (role === 'teacher') {
+      // Teachers see schedules for exams where they have accepted assignments
+      [schedules] = await pool.execute(
+        `SELECT s.*, e.name AS exam_name, e.subject_name, ea.teacher_id, ea.status AS assignment_status
+         FROM schedules s
+         JOIN exams e ON s.exam_id = e.id
+         JOIN exam_assignments ea ON e.id = ea.exam_id
+         WHERE ea.teacher_id = ? AND ea.status = 'accepted'`,
+        [user_id]
+      );
+    } else if (role === 'student') {
+      // Students see schedules for exams with approved registrations
+      [schedules] = await pool.execute(
+        `SELECT s.*, e.name AS exam_name, e.subject_name, r.student_id, r.status AS registration_status
+         FROM schedules s
+         JOIN exams e ON s.exam_id = e.id
+         JOIN exam_registrations r ON e.id = r.exam_id
+         WHERE r.student_id = ? AND r.status = 'approved'`,
+        [user_id]
+      );
+    } else {
+      return res.status(403).json({ message: 'Vai trò không hợp lệ' });
+    }
+
+    res.json({ schedules });
+  } catch (err) {
+    console.error('[getMySchedules] Error:', err);
     res.status(500).json({ message: 'Lỗi server' });
   }
 }
@@ -112,6 +169,17 @@ async function updateSchedule(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy kỳ thi' });
     }
 
+    // For teachers, verify they are assigned to the exam and have accepted
+    if (req.user.role === 'teacher') {
+      const [assignments] = await pool.execute(
+        'SELECT id FROM exam_assignments WHERE exam_id = ? AND teacher_id = ? AND status = ?',
+        [exam_id, req.user.id, 'accepted']
+      );
+      if (assignments.length === 0) {
+        return res.status(403).json({ message: 'Bạn không được phân công hoặc chưa chấp nhận phân công cho kỳ thi này' });
+      }
+    }
+
     const [conflicts] = await pool.execute(
       `SELECT * FROM schedules WHERE room = ? AND id != ?
         AND (
@@ -139,6 +207,9 @@ async function updateSchedule(req, res) {
     );
 
     req.io.to('admin-room').emit('schedule-updated', updated[0]);
+    if (req.user.role === 'teacher') {
+      req.io.to(`user-${req.user.id}`).emit('schedule-updated', updated[0]);
+    }
 
     res.json({ message: 'Cập nhật thành công', schedule: updated[0] });
   } catch (err) {
@@ -155,9 +226,20 @@ async function deleteSchedule(req, res) {
 
     const { id } = req.params;
 
-    const [exists] = await pool.execute('SELECT id FROM schedules WHERE id = ?', [id]);
+    const [exists] = await pool.execute('SELECT id, exam_id FROM schedules WHERE id = ?', [id]);
     if (exists.length === 0) {
       return res.status(404).json({ message: 'Không tìm thấy lịch thi' });
+    }
+
+    // For teachers, verify they are assigned to the exam and have accepted
+    if (req.user.role === 'teacher') {
+      const [assignments] = await pool.execute(
+        'SELECT id FROM exam_assignments WHERE exam_id = ? AND teacher_id = ? AND status = ?',
+        [exists[0].exam_id, req.user.id, 'accepted']
+      );
+      if (assignments.length === 0) {
+        return res.status(403).json({ message: 'Bạn không được phân công hoặc chưa chấp nhận phân công cho kỳ thi này' });
+      }
     }
 
     await pool.execute('DELETE FROM schedules WHERE id = ?', [id]);
@@ -202,8 +284,9 @@ async function checkScheduleConflict(req, res) {
 module.exports = {
   createSchedule,
   getAllSchedules,
+  getMySchedules,
   getSchedulesByExam,
   updateSchedule,
   deleteSchedule,
-  checkScheduleConflict
+  checkScheduleConflict,
 };

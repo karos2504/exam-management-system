@@ -142,7 +142,7 @@ const notificationController = {
       await pool.execute('DELETE FROM notifications WHERE id = ?', [id]);
 
       res.json({ success: true, message: 'Xóa thông báo thành công' });
-    } catch (err) {
+    } catch(err) {
       console.error('Error deleting notification:', err);
       res.status(500).json({ message: 'Lỗi server' });
     }
@@ -165,6 +165,12 @@ const notificationController = {
         'UPDATE notifications SET is_read = ? WHERE id = ?',
         [true, id]
       );
+
+      // Emit socket event to notify clients of the read status change
+      if (req.io) {
+        req.io.to(`user-${user_id}`).emit('notification-read', { id, user_id });
+        console.log(`Emitted notification-read event for notification ${id} to user-${user_id}`);
+      }
 
       res.json({ success: true, message: 'Đánh dấu thông báo đã đọc' });
     } catch (err) {

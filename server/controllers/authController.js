@@ -7,13 +7,17 @@ const { v4: uuidv4 } = require('uuid');
 const authController = {
   // Đăng ký người dùng mới
   async register(req, res) {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
+    console.log("Incoming registration request body:", req.body); // For debugging
 
-      const { username, full_name, email, password, role, phone, avatar_url } = req.body;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.error("Validation errors:", errors.array()); // For debugging
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+      // Only destructure the fields expected from the frontend
+      const { username, full_name, email, password, role } = req.body;
 
       // Kiểm tra username hoặc email đã tồn tại
       const [existingUsers] = await pool.execute(
@@ -21,7 +25,7 @@ const authController = {
         [username, email]
       );
       if (existingUsers.length > 0) {
-        return res.status(400).json({ message: 'Username hoặc email đã tồn tại' });
+        return res.status(400).json({ message: 'Tên đăng nhập hoặc email đã tồn tại' });
       }
 
       // Mã hóa mật khẩu
@@ -29,9 +33,18 @@ const authController = {
       const id = uuidv4();
 
       // Tạo người dùng mới
+      // Phone and avatar_url columns will implicitly be NULL if not provided,
+      // assuming your database schema allows NULL for these columns.
       await pool.execute(
-        'INSERT INTO users (id, username, full_name, email, password_hash, phone, role, avatar_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [id, username, full_name, email, password_hash, phone, role, avatar_url]
+        'INSERT INTO users (id, username, full_name, email, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)',
+        [
+          id,
+          username,
+          full_name,
+          email,
+          password_hash,
+          role
+        ]
       );
 
       res.status(201).json({
@@ -41,9 +54,7 @@ const authController = {
           username,
           full_name,
           email,
-          role,
-          phone,
-          avatar_url
+          role
         }
       });
     } catch (error) {
@@ -60,14 +71,12 @@ const authController = {
         return res.status(400).json({ errors: errors.array() });
       }
 
-      // Cho phép nhận identifier, username hoặc email
       const identifier = req.body.identifier || req.body.username || req.body.email;
       const password = req.body.password;
       if (!identifier || !password) {
         return res.status(400).json({ message: 'Thiếu tài khoản hoặc mật khẩu' });
       }
 
-      // Tìm người dùng theo username hoặc email
       const [users] = await pool.execute(
         'SELECT * FROM users WHERE username = ? OR email = ?',
         [identifier, identifier]
@@ -82,13 +91,11 @@ const authController = {
         return res.status(401).json({ message: 'Tài khoản hoặc mật khẩu không đúng' });
       }
 
-      // Kiểm tra mật khẩu
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
       if (!isValidPassword) {
         return res.status(401).json({ message: 'Tài khoản hoặc mật khẩu không đúng' });
       }
 
-      // Tạo JWT token
       const token = jwt.sign(
         { id: user.id, username: user.username, email: user.email, role: user.role },
         process.env.JWT_SECRET || 'secret-key',
@@ -104,8 +111,8 @@ const authController = {
           full_name: user.full_name,
           email: user.email,
           role: user.role,
-          phone: user.phone,
-          avatar_url: user.avatar_url
+          phone: user.phone, // Still include in response for existing users
+          avatar_url: user.avatar_url // Still include in response for existing users
         }
       });
     } catch (error) {
@@ -134,4 +141,4 @@ const authController = {
   }
 };
 
-module.exports = authController; 
+module.exports = authController;

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import api from '../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
+import socketService from '../../services/socketService'; // Import socketService
 import { Calendar, MapPin, Clock, CheckCircle, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Button from '../components/UI/Button';
-import Modal from '../components/UI/Modal';
-import Loading from '../components/UI/Loading';
-// import Toast from '../components/UI/Toast'; // <--- Correctly commented out or deleted
-import Badge from '../components/UI/Badge';
+import Button from '../../components/UI/Button';
+import Modal from '../../components/UI/Modal';
+import Loading from '../../components/UI/Loading';
+import Badge from '../../components/UI/Badge';
 
 const MyRegistrations = () => {
   const { user } = useAuth();
@@ -15,15 +15,41 @@ const MyRegistrations = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user || !user.id || !user.role) {
+      console.error('[MyRegistrations] Invalid user data:', user);
+      toast.error('Vui lòng đăng nhập lại');
+      setLoading(false);
+      return;
+    }
+
     fetchRegistrations();
-  }, []);
+
+    // Set up socket listeners
+    socketService.connect({ id: user.id, role: user.role });
+
+    socketService.onNotificationReceived((data) => {
+      console.log('[MyRegistrations] Received notification:', data);
+      if (data.type === 'registration' && data.user_id === user.id) {
+        toast.success(data.content);
+        fetchRegistrations(); // Refresh registrations on status change
+      }
+    });
+
+    return () => {
+      socketService.off('notification-created', socketService.onNotificationReceived);
+      socketService.disconnect();
+    };
+  }, [user]);
 
   const fetchRegistrations = async () => {
     try {
+      setLoading(true);
       const response = await api.get('/registrations/my-registrations');
-      setRegistrations(response.data.registrations);
+      console.log('[MyRegistrations] Fetched registrations:', response.data.registrations);
+      setRegistrations(response.data.registrations || []);
     } catch (error) {
-      toast.error('Lỗi khi tải danh sách đăng ký');
+      console.error('[MyRegistrations] Error fetching registrations:', error.response?.data || error);
+      toast.error(error.response?.data?.message || 'Lỗi khi tải danh sách đăng ký');
     } finally {
       setLoading(false);
     }
@@ -32,12 +58,12 @@ const MyRegistrations = () => {
   const handleCancelRegistration = async (registrationId) => {
     if (window.confirm('Bạn có chắc muốn hủy đăng ký kỳ thi này?')) {
       try {
-        // FIX IS HERE: Changed to api.delete and removed '/cancel' from the path
         await api.delete(`/registrations/${registrationId}`);
         toast.success('Hủy đăng ký thành công');
-        fetchRegistrations(); // Re-fetch registrations to update UI
+        fetchRegistrations();
       } catch (error) {
-        toast.error(error.response?.data?.message || 'Lỗi khi hủy đăng ký'); // Added error message from response
+        console.error('[MyRegistrations] Error canceling registration:', error.response?.data || error);
+        toast.error(error.response?.data?.message || 'Lỗi khi hủy đăng ký');
       }
     }
   };
@@ -58,7 +84,7 @@ const MyRegistrations = () => {
   };
 
   const formatDateTime = (dateTime) => {
-    // Ensure the date is correctly parsed to avoid "Invalid Date" on some browsers
+    if (!dateTime) return 'Chưa có lịch thi';
     const date = new Date(dateTime);
     if (isNaN(date.getTime())) {
       return 'Thời gian không hợp lệ';
@@ -104,11 +130,11 @@ const MyRegistrations = () => {
                       </p>
 
                       {/* Display room and time ONLY IF STATUS IS 'approved' */}
-                      {registration.status === 'approved' && registration.room && registration.start_time && (
+                      {registration.status === 'approved' && (
                         <div className="space-y-2">
                           <div className="flex items-center text-sm text-gray-600">
                             <MapPin className="h-4 w-4 mr-2" />
-                            Phòng thi: {registration.room}
+                            Phòng thi: {registration.room || 'Chưa có lịch thi'}
                           </div>
                           <div className="flex items-center text-sm text-gray-600">
                             <Calendar className="h-4 w-4 mr-2" />

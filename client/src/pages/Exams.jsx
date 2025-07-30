@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
-import socketService from '@/services/socket';
+import socketService from '@/services/socketService';
 import { Plus, BookOpen, Edit, Trash2, Eye, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/UI/Button';

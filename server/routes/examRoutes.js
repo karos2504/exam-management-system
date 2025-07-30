@@ -1,5 +1,5 @@
 const express = require('express');
-const { body, param } = require('express-validator'); // Import param for validating params like :id
+const { body, param } = require('express-validator');
 const examController = require('../controllers/examController');
 const { auth, authorize } = require('../middleware/auth');
 
@@ -45,23 +45,17 @@ const examValidation = [
     .withMessage('Thời gian thi phải là số nguyên dương'),
 ];
 
-const assignmentValidation = [
-  // Ensure that these body fields are string UUIDs from the frontend
-  body('exam_id').isUUID().withMessage('ID kỳ thi không hợp lệ'),
-  body('teacher_id').isUUID().withMessage('ID giáo viên không hợp lệ'),
-  body('notes').optional().isLength({ max: 1000 }).withMessage('Ghi chú tối đa 1000 ký tự'),
-];
-
 router.use(auth);
 
-// Add validation for :id parameter where appropriate
 router.get('/', examController.getAllExams);
 router.get('/:id', param('id').isUUID().withMessage('ID kỳ thi không hợp lệ'), examController.getExamById);
 router.post('/', authorize('teacher', 'admin'), examValidation, examController.createExam);
 router.put('/:id', authorize('teacher', 'admin'), param('id').isUUID().withMessage('ID kỳ thi không hợp lệ'), examValidation, examController.updateExam);
 router.delete('/:id', authorize('teacher', 'admin'), param('id').isUUID().withMessage('ID kỳ thi không hợp lệ'), examController.deleteExam);
-router.post('/assign', authorize('admin'), assignmentValidation, examController.assignTeacher);
-router.put('/assign/:assignment_id/accept', authorize('teacher'), param('assignment_id').isUUID().withMessage('ID phân công không hợp lệ'), examController.acceptAssignment);
-router.put('/assign/:assignment_id/decline', authorize('teacher'), param('assignment_id').isUUID().withMessage('ID phân công không hợp lệ'), examController.declineAssignment);
+router.post('/assign', authorize('admin'), [
+  body('exam_id').isUUID().withMessage('ID kỳ thi không hợp lệ'),
+  body('teacher_id').isUUID().withMessage('ID giáo viên không hợp lệ'),
+  body('status').isIn(['assigned', 'accepted', 'declined']).withMessage('Trạng thái không hợp lệ'),
+], examController.assignTeacher);
 
 module.exports = router;

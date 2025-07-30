@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
@@ -9,14 +9,28 @@ import Notifications from './components/Notifications';
 import Dashboard from './pages/Dashboard';
 import Exams from './pages/Exams';
 import Schedules from './pages/Schedules';
-import MyRegistrations from './pages/MyRegistrations';
+import MyRegistrations from './pages/students/MyRegistrations';
 import Registrations from './pages/Registrations';
-import AdminUsers from './pages/AdminUsers';
-import AdminNotifications from './pages/AdminNotifications';
-import AdminAssignments from './pages/AdminAssignments';
+import AdminUsers from './pages/admin/AdminUsers';
+import AdminNotifications from './pages/admin/AdminNotifications';
+import AdminAssignments from './pages/admin/AdminAssignments';
+import MyAssignments from './pages/teachers/MyAssignments';
 import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 import '../../public/styles.css';
+
+const AuthNavigator = () => {
+  const { user, loading, logout } = useAuth();
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (!loading && !user) {
+      navigate('/login', { replace: true });
+    }
+  }, [user, loading, navigate]);
+
+  return null;
+};
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -55,10 +69,8 @@ const PublicRoute = ({ children }) => {
 };
 
 const AppRoutes = () => {
-  // You can use `user` here for role-based routing if needed, though ProtectedRoute handles basic auth
   return (
     <Routes>
-      {/* Public routes */}
       <Route
         path="/login"
         element={
@@ -75,8 +87,6 @@ const AppRoutes = () => {
           </PublicRoute>
         }
       />
-
-      {/* Protected routes */}
       <Route
         path="/"
         element={
@@ -149,6 +159,14 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/my-assignments"
+        element={
+          <ProtectedRoute>
+            <MyAssignments />
+          </ProtectedRoute>
+        }
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -159,6 +177,7 @@ const App = () => {
     <AuthProvider>
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ErrorBoundary>
+          <AuthNavigator />
           <AppRoutes />
         </ErrorBoundary>
         <Toaster

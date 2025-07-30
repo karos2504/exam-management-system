@@ -4,14 +4,20 @@ import toast from 'react-hot-toast';
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState([]);
+  const [notificationCount, setNotificationCount] = useState(0); // Track locally for optimism
 
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
+        console.log('[Notifications] Fetching user notifications');
         const response = await api.get('/notifications/');
+        console.log('[Notifications] Notifications fetched:', response.data.notifications);
         setNotifications(response.data.notifications);
+        // Calculate local count of unread notifications
+        const unreadCount = response.data.notifications.filter(n => !n.is_read).length;
+        setNotificationCount(unreadCount);
       } catch (err) {
-        console.error('Error fetching notifications:', err);
+        console.error('[Notifications] Error fetching notifications:', err);
         toast.error('Không thể tải thông báo');
       }
     };
@@ -20,11 +26,25 @@ const Notifications = () => {
 
   const markAsRead = async (id) => {
     try {
+      console.log('[Notifications] Marking notification as read:', id);
       await api.patch(`/notifications/${id}/mark-read`);
       setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
-      toast.success('Đã đánh dấu là đã đọc');
+
+      // Optimistically update notification count
+      setNotificationCount((prev) => Math.max(0, prev - 1));
+
+      // Re-fetch unread count to ensure consistency
+      try {
+        const response = await api.get('/notifications/unread-count');
+        console.log('[Notifications] Updated unread count:', response.data.count);
+        setNotificationCount(response.data.count || 0);
+        toast.success('Đã đánh dấu là đã đọc');
+      } catch (err) {
+        console.error('[Notifications] Error fetching unread count after markAsRead:', err);
+        toast.error('Không thể cập nhật số lượng thông báo');
+      }
     } catch (err) {
-      console.error('Error marking notification as read:', err);
+      console.error('[Notifications] Error marking notification as read:', err);
       toast.error('Không thể đánh dấu là đã đọc');
     }
   };

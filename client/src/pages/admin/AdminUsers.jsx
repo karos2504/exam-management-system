@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import api from '../services/api';
-import Button from '../components/UI/Button';
-import Modal from '../components/UI/Modal';
-import Loading from '../components/UI/Loading';
+import api from '../../services/api';
+import Button from '../../components/UI/Button';
+import Modal from '../../components/UI/Modal';
+import Loading from '../../components/UI/Loading';
 import toast from 'react-hot-toast';
-import Badge from '../components/UI/Badge';
+import Badge from '../../components/UI/Badge';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 
 const AdminUsers = () => {

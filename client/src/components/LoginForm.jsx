@@ -20,15 +20,21 @@ const LoginForm = () => {
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
+      console.log('[LoginForm] Submitting login with data:', data);
       const result = await login(data);
+      console.log('[LoginForm] Login result:', result);
+
       if (result.success) {
-        toast.success('Đăng nhập thành công!');
+        console.log('[LoginForm] Navigating to dashboard');
         navigate('/');
-      } else {
-        toast.error(result.error);
       }
+      // Error toast is handled by AuthContext.jsx
     } catch (error) {
-      toast.error('Có lỗi xảy ra khi đăng nhập');
+      console.error('[LoginForm] Unexpected error during login:', error);
+      // Fallback error toast, but should be avoided due to AuthContext handling
+      toast.error('Có lỗi bất ngờ xảy ra khi đăng nhập', {
+        id: 'login-unexpected-error', // Unique ID for unexpected errors
+      });
     } finally {
       setIsLoading(false);
     }
