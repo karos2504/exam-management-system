@@ -16,6 +16,7 @@ exports.getAllAssignments = async (req, res) => {
     `);
     res.json({ success: true, assignments });
   } catch (err) {
+    console.error('Lỗi lấy danh sách phân công:', err);
     res.status(500).json({ success: false, message: 'Lỗi lấy danh sách phân công', error: err.message });
   }
 };
@@ -36,6 +37,7 @@ exports.getMyAssignments = async (req, res) => {
     `, [teacher_id]);
     res.json({ success: true, assignments });
   } catch (err) {
+    console.error('Lỗi lấy danh sách phân công của giáo viên:', err);
     res.status(500).json({ success: false, message: 'Lỗi lấy danh sách phân công của giáo viên', error: err.message });
   }
 };
@@ -55,6 +57,7 @@ exports.getAssignmentById = async (req, res) => {
     if (!rows.length) return res.status(404).json({ success: false, message: 'Không tìm thấy phân công' });
     res.json({ success: true, assignment: rows[0] });
   } catch (err) {
+    console.error('Lỗi lấy phân công:', err);
     res.status(500).json({ success: false, message: 'Lỗi lấy phân công', error: err.message });
   }
 };
@@ -152,6 +155,7 @@ exports.updateAssignment = async (req, res) => {
 
     res.json({ success: true, message: 'Cập nhật phân công thành công' });
   } catch (err) {
+    console.error('Lỗi cập nhật phân công:', err);
     res.status(500).json({ success: false, message: 'Lỗi cập nhật phân công', error: err.message });
   }
 };
@@ -166,6 +170,7 @@ exports.deleteAssignment = async (req, res) => {
     await db.query('DELETE FROM exam_assignments WHERE id = ?', [req.params.id]);
     res.json({ success: true, message: 'Xóa phân công thành công' });
   } catch (err) {
+    console.error('Lỗi xóa phân công:', err);
     res.status(500).json({ success: false, message: 'Lỗi xóa phân công', error: err.message });
   }
 };
@@ -185,6 +190,7 @@ exports.getAvailableTeachers = async (req, res) => {
     const [teachers] = await db.query(sql, params);
     res.json({ success: true, teachers });
   } catch (err) {
+    console.error('Lỗi lấy giáo viên:', err);
     res.status(500).json({ success: false, message: 'Lỗi lấy giáo viên', error: err.message });
   }
 };
@@ -204,15 +210,19 @@ exports.acceptAssignment = async (req, res) => {
       [assignment_id, teacher_id]
     );
     if (assignments.length === 0) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy phân công' });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy phân công hoặc không có quyền' });
     }
 
     if (assignments[0].status === 'accepted') {
       return res.status(400).json({ success: false, message: 'Phân công đã được chấp nhận trước đó' });
     }
 
+    if (assignments[0].status === 'declined') {
+      return res.status(400).json({ success: false, message: 'Phân công đã bị từ chối trước đó' });
+    }
+
     await db.query(
-      'UPDATE exam_assignments SET status = ? WHERE id = ?',
+      'UPDATE exam_assignments SET status = ?, assigned_at = NOW() WHERE id = ?',
       ['accepted', assignment_id]
     );
 
@@ -261,7 +271,7 @@ exports.acceptAssignment = async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: 'Chấp nhận phân công thành công' });
+    res.json({ success: true, message: 'Chấp nhận phân công thành công', assignment: { id: assignment_id, status: 'accepted' } });
   } catch (err) {
     console.error('Lỗi chấp nhận phân công:', err);
     res.status(500).json({ success: false, message: 'Lỗi server', error: err.message });
@@ -283,15 +293,19 @@ exports.declineAssignment = async (req, res) => {
       [assignment_id, teacher_id]
     );
     if (assignments.length === 0) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy phân công' });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy phân công hoặc không có quyền' });
     }
 
     if (assignments[0].status === 'declined') {
       return res.status(400).json({ success: false, message: 'Phân công đã bị từ chối trước đó' });
     }
 
+    if (assignments[0].status === 'accepted') {
+      return res.status(400).json({ success: false, message: 'Phân công đã được chấp nhận trước đó' });
+    }
+
     await db.query(
-      'UPDATE exam_assignments SET status = ? WHERE id = ?',
+      'UPDATE exam_assignments SET status = ?, assigned_at = NOW() WHERE id = ?',
       ['declined', assignment_id]
     );
 
@@ -340,7 +354,7 @@ exports.declineAssignment = async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: 'Từ chối phân công thành công' });
+    res.json({ success: true, message: 'Từ chối phân công thành công', assignment: { id: assignment_id, status: 'declined' } });
   } catch (err) {
     console.error('Lỗi từ chối phân công:', err);
     res.status(500).json({ success: false, message: 'Lỗi server', error: err.message });

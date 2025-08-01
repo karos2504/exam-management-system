@@ -4,11 +4,15 @@
 
 -- Drop existing database if it exists and create a new one to ensure a clean slate
 DROP DATABASE IF EXISTS exam_management;
-CREATE DATABASE IF NOT EXISTS exam_management;
+CREATE DATABASE exam_management;
 USE exam_management;
 
+-- Set time zone to +07:00 (matching your environment)
+SET GLOBAL time_zone = '+07:00';
+SET SESSION time_zone = '+07:00';
+
 -- 1. USERS: Người dùng (Admin, Teacher, Student)
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
     id VARCHAR(36) PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
@@ -24,7 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- 2. COURSES: Khóa học
-CREATE TABLE IF NOT EXISTS courses (
+CREATE TABLE courses (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     description TEXT,
@@ -37,7 +41,7 @@ CREATE TABLE IF NOT EXISTS courses (
 );
 
 -- 3. COURSE_ENROLLMENTS: Đăng ký khóa học
-CREATE TABLE IF NOT EXISTS course_enrollments (
+CREATE TABLE course_enrollments (
     id VARCHAR(36) PRIMARY KEY,
     course_id VARCHAR(36) NOT NULL,
     student_id VARCHAR(36) NOT NULL,
@@ -49,7 +53,7 @@ CREATE TABLE IF NOT EXISTS course_enrollments (
 );
 
 -- 4. EXAMS: Kỳ thi
-CREATE TABLE IF NOT EXISTS exams (
+CREATE TABLE exams (
     id VARCHAR(36) PRIMARY KEY,
     code VARCHAR(20) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
@@ -68,7 +72,7 @@ CREATE TABLE IF NOT EXISTS exams (
 );
 
 -- 5. EXAM_ASSIGNMENTS: Phân công teacher cho exam
-CREATE TABLE IF NOT EXISTS exam_assignments (
+CREATE TABLE exam_assignments (
     id VARCHAR(36) PRIMARY KEY,
     exam_id VARCHAR(36) NOT NULL,
     teacher_id VARCHAR(36) NOT NULL,
@@ -84,7 +88,7 @@ CREATE TABLE IF NOT EXISTS exam_assignments (
 );
 
 -- 6. SCHEDULES: Lịch thi
-CREATE TABLE IF NOT EXISTS schedules (
+CREATE TABLE schedules (
     id VARCHAR(36) PRIMARY KEY,
     exam_id VARCHAR(36) NOT NULL,
     room VARCHAR(50) NOT NULL,
@@ -98,7 +102,7 @@ CREATE TABLE IF NOT EXISTS schedules (
 );
 
 -- 7. EXAM_REGISTRATIONS: Đăng ký thi
-CREATE TABLE IF NOT EXISTS exam_registrations (
+CREATE TABLE exam_registrations (
     id VARCHAR(36) PRIMARY KEY,
     exam_id VARCHAR(36) NOT NULL,
     student_id VARCHAR(36) NOT NULL,
@@ -113,7 +117,7 @@ CREATE TABLE IF NOT EXISTS exam_registrations (
 );
 
 -- 8. QUESTIONS: Câu hỏi
-CREATE TABLE IF NOT EXISTS questions (
+CREATE TABLE questions (
     id VARCHAR(36) PRIMARY KEY,
     exam_id VARCHAR(36) NOT NULL,
     content TEXT NOT NULL,
@@ -124,7 +128,7 @@ CREATE TABLE IF NOT EXISTS questions (
 );
 
 -- 9. CHOICES: Đáp án trắc nghiệm
-CREATE TABLE IF NOT EXISTS choices (
+CREATE TABLE choices (
     id VARCHAR(36) PRIMARY KEY,
     question_id VARCHAR(36) NOT NULL,
     content VARCHAR(255) NOT NULL,
@@ -134,7 +138,7 @@ CREATE TABLE IF NOT EXISTS choices (
 );
 
 -- 10. SUBMISSIONS: Bài nộp
-CREATE TABLE IF NOT EXISTS submissions (
+CREATE TABLE submissions (
     id VARCHAR(36) PRIMARY KEY,
     exam_id VARCHAR(36) NOT NULL,
     student_id VARCHAR(36) NOT NULL,
@@ -148,7 +152,7 @@ CREATE TABLE IF NOT EXISTS submissions (
 );
 
 -- 11. SUBMISSION_ANSWERS: Câu trả lời của học sinh
-CREATE TABLE IF NOT EXISTS submission_answers (
+CREATE TABLE submission_answers (
     id VARCHAR(36) PRIMARY KEY,
     submission_id VARCHAR(36) NOT NULL,
     question_id VARCHAR(36) NOT NULL,
@@ -161,10 +165,10 @@ CREATE TABLE IF NOT EXISTS submission_answers (
 );
 
 -- 12. NOTIFICATIONS: Thông báo
-CREATE TABLE IF NOT EXISTS notifications (
+CREATE TABLE notifications (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36),
-    type ENUM('registration', 'reminder', 'result', 'system', 'assignment', 'other') DEFAULT 'other',
+    type ENUM('registration', 'reminder', 'result', 'system', 'assignment', 'assignment_status', 'other') DEFAULT 'other',
     content TEXT NOT NULL,
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

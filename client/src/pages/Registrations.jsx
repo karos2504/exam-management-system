@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
-import { CheckCircle, XCircle, Users } from 'lucide-react';
+import { CheckCircle, XCircle, Users, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../components/UI/Button';
 import Modal from '../components/UI/Modal';
@@ -17,6 +17,8 @@ const Registrations = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [currentRegistrationToReject, setCurrentRegistrationToReject] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewingRegistration, setViewingRegistration] = useState(null);
 
   useEffect(() => {
     fetchExams();
@@ -35,7 +37,7 @@ const Registrations = () => {
     try {
       setLoading(true);
       const response = await api.get('/exams');
-      const fetchedExams = response.data.exams;
+      const fetchedExams = response.data.exams || [];
       setExams(fetchedExams);
       if (fetchedExams.length > 0) {
         setSelectedExam(fetchedExams[0].id);
@@ -54,7 +56,7 @@ const Registrations = () => {
     setLoading(true);
     try {
       const response = await api.get(`/registrations/exam/${examId}`);
-      setRegistrations(response.data.registrations);
+      setRegistrations(response.data.registrations || []);
     } catch (error) {
       const message = error.response?.status === 403
         ? 'Bạn không có quyền xem đăng ký của kỳ thi này.'
@@ -94,6 +96,11 @@ const Registrations = () => {
     }
   };
 
+  const handleViewRegistration = (registration) => {
+    setViewingRegistration(registration);
+    setShowViewModal(true);
+  };
+
   const getStatusBadge = (status) => {
     let badgeText = '';
     let variant = 'default';
@@ -119,11 +126,11 @@ const Registrations = () => {
         badgeText = 'Không rõ';
         variant = 'default';
     }
-    return <Badge variant={variant}>{badgeText}</Badge>;
+    return <Badge type={variant} text={badgeText} />;
   };
 
   const formatDateTime = (dateTime) => {
-    return new Date(dateTime).toLocaleString('vi-VN');
+    return dateTime ? new Date(dateTime).toLocaleString('vi-VN') : 'N/A';
   };
 
   if (loading && exams.length === 0) {
@@ -223,22 +230,29 @@ const Registrations = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex space-x-2">
+                            <Button
+                              variant="info"
+                              onClick={() => handleViewRegistration(registration)}
+                              title="Xem chi tiết"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
                             {registration.status === 'pending' && (
                               <>
-                                <button
+                                <Button
+                                  variant="success"
                                   onClick={() => handleUpdateRegistrationStatus(registration.id, 'approved')}
-                                  className="text-green-600 hover:text-green-900"
                                   title="Xác nhận đăng ký"
                                 >
                                   <CheckCircle className="h-4 w-4" />
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                  variant="danger"
                                   onClick={() => openRejectModal(registration)}
-                                  className="text-red-600 hover:text-red-900"
                                   title="Từ chối đăng ký"
                                 >
                                   <XCircle className="h-4 w-4" />
-                                </button>
+                                </Button>
                               </>
                             )}
                           </div>
@@ -261,6 +275,30 @@ const Registrations = () => {
             )}
           </div>
         </div>
+      )}
+
+      {showViewModal && (
+        <Modal
+          isOpen={showViewModal}
+          onClose={() => setShowViewModal(false)}
+          title={`Chi tiết đăng ký: ${viewingRegistration?.student_name || ''}`}
+        >
+          {viewingRegistration ? (
+            <div className="space-y-3 text-sm text-gray-700">
+              <p><strong>Học sinh:</strong> {viewingRegistration.student_name}</p>
+              <p><strong>Email:</strong> {viewingRegistration.student_email}</p>
+              <p><strong>Kỳ thi:</strong> {exams.find(e => e.id === viewingRegistration.exam_id)?.name || 'N/A'}</p>
+              <p><strong>Học phần:</strong> {exams.find(e => e.id === viewingRegistration.exam_id)?.subject_name || 'N/A'}</p>
+              <p><strong>Trạng thái:</strong> {getStatusBadge(viewingRegistration.status)}</p>
+              <p><strong>Thời gian đăng ký:</strong> {formatDateTime(viewingRegistration.registered_at)}</p>
+              {viewingRegistration.status === 'rejected' && (
+                <p><strong>Lý do từ chối:</strong> {viewingRegistration.rejection_reason || 'Không có'}</p>
+              )}
+            </div>
+          ) : (
+            <p>Không có dữ liệu để hiển thị.</p>
+          )}
+        </Modal>
       )}
 
       {showRejectModal && (

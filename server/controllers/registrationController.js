@@ -106,7 +106,7 @@ const registrationController = {
       const notificationContent = `Đã hủy đăng ký kỳ thi "${registration.exam_name}" thành công.`;
       const notificationId = uuidv4();
       await pool.execute(
-        'INSERT INTO notifications (id, user_id, type, content, exam__id, created_at, is_read) VALUES (?, ?, ?, ?, ?, NOW(), ?)',
+        'INSERT INTO notifications (id, user_id, type, content, exam_id, created_at, is_read) VALUES (?, ?, ?, ?, ?, NOW(), ?)',
         [notificationId, student_id, 'registration', notificationContent, exam_id, 0]
       );
 

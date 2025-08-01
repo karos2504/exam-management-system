@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
 import socketService from '@/services/socketService';
-import { Plus, BookOpen, Edit, Trash2, Eye, CheckCircle } from 'lucide-react';
+import { Plus, BookOpen, Eye, CheckCircle, Edit, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/UI/Button';
 import Modal from '@/components/UI/Modal';
@@ -96,8 +96,7 @@ const Exams = () => {
         socketService.onExamDeleted(handleExamDeleted);
         socketService.onExamRegistrationCountUpdated(handleExamRegistrationCountUpdated);
       } else {
-        // This warning can be left for debugging connection issues, or removed if stable
-        console.warn('Socket not active in Exams.jsx when attempting to attach listeners. It might connect shortly.');
+        console.warn('Socket not active in Exams.jsx when attempting to attach listeners.');
       }
 
       return () => {
@@ -199,6 +198,11 @@ const Exams = () => {
     }
   };
 
+  const handleViewExam = (exam) => {
+    setViewingExam(exam);
+    setShowViewModal(true);
+  };
+
   const handleEdit = (exam) => {
     setEditingExam(exam);
     setFormData({
@@ -213,11 +217,6 @@ const Exams = () => {
     });
     setShowModal(true);
     setFormErrors({});
-  };
-
-  const handleViewExam = (exam) => {
-    setViewingExam(exam);
-    setShowViewModal(true);
   };
 
   const handleDelete = async (examId) => {
@@ -255,9 +254,9 @@ const Exams = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Quản lý kỳ thi</h1>
-          <p className="mt-1 text-sm text-gray-500">Tạo và quản lý các kỳ thi trong hệ thống</p>
+          <p className="mt-1 text-sm text-gray-500">Xem và quản lý các kỳ thi trong hệ thống</p>
         </div>
-        {(user?.role === 'teacher' || user?.role === 'admin') && (
+        {user?.role === 'admin' && (
           <Button variant="primary" onClick={() => setShowModal(true)}>
             <Plus className="h-4 w-4 mr-2" /> Tạo kỳ thi
           </Button>
@@ -307,18 +306,14 @@ const Exams = () => {
                               </Button>
                             )
                           )}
-                          {(user?.role === 'teacher' || user?.role === 'admin') && (
+                          {user?.role === 'admin' && (
                             <>
-                              {(user.id === exam.created_by || user.role === 'admin') && (
-                                <>
-                                  <Button variant="info" onClick={() => handleEdit(exam)}>
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button variant="danger" onClick={() => handleDelete(exam.id)}>
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </>
-                              )}
+                              <Button variant="info" onClick={() => handleEdit(exam)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="danger" onClick={() => handleDelete(exam.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </>
                           )}
                         </div>
@@ -332,7 +327,9 @@ const Exams = () => {
             <div className="text-center py-8">
               <BookOpen className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có kỳ thi</h3>
-              <p className="mt-1 text-sm text-gray-500">Bắt đầu tạo kỳ thi đầu tiên.</p>
+              <p className="mt-1 text-sm text-gray-500">
+                {user?.role === 'admin' ? 'Bắt đầu tạo kỳ thi đầu tiên.' : 'Không có kỳ thi nào để hiển thị.'}
+              </p>
             </div>
           )}
         </div>
@@ -503,7 +500,6 @@ const Exams = () => {
           </div>
         </form>
       </Modal>
-
     </div>
   );
 };

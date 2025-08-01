@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
 import socketService from '@/services/socketService';
-import { Plus, BookOpen, Edit, Trash2, Calendar, Eye } from 'lucide-react';
+import { Calendar, Eye, Plus, Edit, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/UI/Button';
 import Modal from '@/components/UI/Modal';
@@ -198,10 +198,10 @@ const Schedules = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Quản lý lịch thi</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {user?.role === 'student' ? 'Lịch thi của các kỳ thi đã đăng ký' : 'Xếp lịch và quản lý thời gian thi'}
+            {user?.role === 'student' ? 'Lịch thi của các kỳ thi đã đăng ký' : 'Xem và quản lý thời gian thi'}
           </p>
         </div>
-        {(user?.role === 'teacher' || user?.role === 'admin') && (
+        {user?.role === 'admin' && (
           <Button variant="primary" onClick={() => setShowModal(true)}>
             <Plus className="h-4 w-4 mr-2" /> Tạo lịch thi
           </Button>
@@ -237,7 +237,7 @@ const Schedules = () => {
                           <Button variant="info" onClick={() => handleViewSchedule(schedule)}>
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {(user?.role === 'teacher' || user?.role === 'admin') && (
+                          {user?.role === 'admin' && (
                             <>
                               <Button variant="info" onClick={() => handleEdit(schedule)}>
                                 <Edit className="h-4 w-4" />
@@ -259,14 +259,17 @@ const Schedules = () => {
               <Calendar className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">Chưa có lịch thi</h3>
               <p className="mt-1 text-sm text-gray-500">
-                {user?.role === 'student'
-                  ? 'Bạn chưa có kỳ thi được phê duyệt.'
-                  : 'Bắt đầu tạo lịch thi đầu tiên.'}
+                {user?.role === 'admin'
+                  ? 'Bắt đầu tạo lịch thi đầu tiên.'
+                  : user?.role === 'student'
+                    ? 'Bạn chưa có kỳ thi được phê duyệt.'
+                    : 'Không có lịch thi nào để hiển thị.'}
               </p>
             </div>
           )}
         </div>
       </div>
+
       <Modal
         isOpen={showViewModal}
         onClose={() => setShowViewModal(false)}
@@ -307,7 +310,7 @@ const Schedules = () => {
             >
               <option value="">Chọn kỳ thi</option>
               {exams
-                .filter((exam) => user?.role !== 'teacher' || exam.teacher_id === user.id) // Teachers only see their assigned exams
+                .filter((exam) => user?.role === 'admin') // Only admins can create/edit schedules
                 .map((exam) => (
                   <option key={exam.id} value={exam.id}>
                     {exam.name} - {exam.subject_name}
